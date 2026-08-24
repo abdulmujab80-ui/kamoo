@@ -1,0 +1,458 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DIRECT_URL")
+}
+
+
+
+enum Role {
+
+  SUPERADMIN
+
+  ADMIN_SEKRETARIS
+
+  ADMIN_BENDAHARA
+
+  PENGURUS
+
+  ANGGOTA
+
+}
+
+
+
+enum StatusSurat {
+
+  DRAFT
+
+  DIAJUKAN
+
+  DIPROSES
+
+  DISETUJUI
+
+  DITOLAK
+
+  SELESAI
+
+}
+
+
+
+enum StatusApproval {
+
+  MENUNGGU
+
+  DISETUJUI
+
+  DITOLAK
+
+}
+
+
+
+enum JenisTransaksi {
+
+  MASUK
+
+  KELUAR
+
+}
+
+
+
+
+
+model User {
+
+  id String @id @default(uuid())
+
+  nama String
+
+  email String @unique
+
+  password String
+
+  role Role
+
+  aktif Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+
+  pengajuanSurat PengajuanSurat[]
+
+  reimburse Reimburse[]
+
+  approvals Approval[]
+
+  audit AuditLog[]
+
+}
+
+
+
+
+
+
+
+model SuratMasuk {
+
+  id String @id @default(uuid())
+
+  nomorSurat String
+
+  tanggalSurat DateTime
+
+  asal String
+
+  perihal String
+
+  fileUrl String?
+
+  status StatusSurat @default(DIAJUKAN)
+
+  createdAt DateTime @default(now())
+
+}
+
+
+
+
+
+
+
+model SuratKeluar {
+
+
+  id String @id @default(uuid())
+
+
+  nomorSurat String @unique
+
+
+  kodeJenis String
+
+
+  kodeNomor String
+
+
+  tujuan String
+
+
+  perihal String
+
+
+  isiSurat String
+
+
+  tanggalSurat DateTime
+
+
+  fileUrl String?
+
+
+  status StatusSurat @default(DRAFT)
+
+
+
+  pengajuanId String? @unique
+
+
+  pengajuan PengajuanSurat? @relation(
+    fields: [pengajuanId],
+    references: [id]
+  )
+
+
+  createdAt DateTime @default(now())
+
+}
+
+
+
+
+
+
+
+model PengajuanSurat {
+
+
+  id String @id @default(uuid())
+
+
+  userId String
+
+
+  jenis String
+
+
+  kodeJenis String?
+
+
+  kodeNomor String?
+
+
+  tujuan String
+
+
+  keperluan String
+
+
+  isiSurat String?
+
+
+  tanggalMulai DateTime?
+
+
+  tanggalSelesai DateTime?
+
+
+  fileUrl String?
+
+
+  status StatusSurat @default(DIAJUKAN)
+
+
+
+  user User @relation(
+    fields:[userId],
+    references:[id]
+  )
+
+
+  suratKeluar SuratKeluar?
+
+
+  createdAt DateTime @default(now())
+
+
+}
+
+
+
+
+
+
+
+model NomorSurat {
+
+
+  id String @id @default(uuid())
+
+
+  tahun Int @unique
+
+
+  nomorUrut Int @default(0)
+
+
+  createdAt DateTime @default(now())
+
+
+}
+
+
+
+
+
+
+
+model Reimburse {
+
+
+  id String @id @default(uuid())
+
+
+  userId String
+
+
+  keterangan String
+
+
+  jumlah Float
+
+
+  buktiUrl String?
+
+
+  status StatusApproval @default(MENUNGGU)
+
+
+
+  user User @relation(
+    fields:[userId],
+    references:[id]
+  )
+
+
+  createdAt DateTime @default(now())
+
+
+}
+
+
+
+
+
+
+
+model Keuangan {
+
+
+  id String @id @default(uuid())
+
+
+  jenis JenisTransaksi
+
+
+  keterangan String
+
+
+  jumlah Float
+
+
+  tanggal DateTime
+
+
+  buktiUrl String?
+
+
+  createdAt DateTime @default(now())
+
+
+}
+
+
+
+
+
+
+
+model Jadwal {
+
+
+  id String @id @default(uuid())
+
+
+  judul String
+
+
+  deskripsi String?
+
+
+  lokasi String?
+
+
+  mulai DateTime
+
+
+  selesai DateTime
+
+
+  createdAt DateTime @default(now())
+
+
+}
+
+
+
+
+
+
+
+model Dokumen {
+
+
+  id String @id @default(uuid())
+
+
+  nama String
+
+
+  kategori String
+
+
+  fileUrl String
+
+
+  createdAt DateTime @default(now())
+
+
+}
+
+
+
+
+
+
+
+model Approval {
+
+
+  id String @id @default(uuid())
+
+
+  modul String
+
+
+  dataId String
+
+
+  status StatusApproval @default(MENUNGGU)
+
+
+  catatan String?
+
+
+  userId String
+
+
+
+  user User @relation(
+    fields:[userId],
+    references:[id]
+  )
+
+
+  createdAt DateTime @default(now())
+
+
+}
+
+
+
+
+
+
+
+model AuditLog {
+
+
+  id String @id @default(uuid())
+
+
+  userId String
+
+
+  aktivitas String
+
+
+
+  user User @relation(
+    fields:[userId],
+    references:[id]
+  )
+
+
+  createdAt DateTime @default(now())
+
+
+}
