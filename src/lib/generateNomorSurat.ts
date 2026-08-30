@@ -1,85 +1,93 @@
-import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
+export type KodeJenisSurat = "SB" | "SK";
+
+export const KODE_NOMOR_SURAT: Record<KodeJenisSurat, string> = {
+  SB: "04",
+  SK: "03",
+};
+
+export function tentukanKodeJenis(
+  jenis: string,
+  kodeJenis?: string | null
+): KodeJenisSurat {
+  // Prioritaskan kode yang sudah disimpan pada pengajuan
+  if (kodeJenis === "SK") {
+    return "SK";
+  }
+
+  if (kodeJenis === "SB") {
+    return "SB";
+  }
+
+  // Fallback berdasarkan nama jenis surat
+  const normalized = jenis.trim().toLowerCase();
+
+  if (
+    normalized === "sk" ||
+    normalized.includes("surat keputusan") ||
+    normalized.includes("keputusan")
+  ) {
+    return "SK";
+  }
+
+  // Semua jenis surat umum masuk SB
+  return "SB";
+}
 
 export async function generateNomorSurat(
-  kodeJenis: string,
-  kodeNomor: string
+  tx: Prisma.TransactionClient,
+  kodeJenis: KodeJenisSurat,
+  tanggalSurat: Date = new Date()
 ) {
+  const tahun = tanggalSurat.getFullYear();
 
+  /*
+   * Counter menggunakan 1 record per tahun.
+   *
+   * Jika tahun belum ada:
+   * nomorUrut = 1
+   *
+   * Jika sudah ada:
+   * nomorUrut + 1
+   *
+   * increment dilakukan langsung oleh PostgreSQL sehingga
+   * lebih aman jika dua surat diterbitkan hampir bersamaan.
+   */
+  const counter = await tx.nomorSurat.upsert({
+    where: {
+      tahun,
+    },
 
-const sekarang = new Date();
+    create: {
+      tahun,
+      nomorUrut: 1,
+    },
 
+    update: {
+      nomorUrut: {
+        increment: 1,
+      },
+    },
+  });
 
+  const nomorUrut = String(counter.nomorUrut).padStart(2, "0");
 
-const tahun =
-sekarang.getFullYear();
+  const kodeNomor = KODE_NOMOR_SURAT[kodeJenis];
 
+  const tanggal = String(tanggalSurat.getDate()).padStart(2, "0");
 
+  const bulan = String(tanggalSurat.getMonth() + 1).padStart(2, "0");
 
-const tanggal =
-String(
-sekarang.getDate()
-)
-.padStart(2,"0");
+  const nomorSurat =
+    `${nomorUrut}.${kodeJenis}.${kodeNomor}` +
+    `/KATI/${tanggal}.${bulan}.${tahun}`;
 
-
-
-const bulan =
-String(
-sekarang.getMonth()+1
-)
-.padStart(2,"0");
-
-
-
-
-
-
-const nomor =
-await prisma.nomorSurat.upsert({
-
-where:{
-tahun
-},
-
-
-update:{
-
-nomorUrut:{
-increment:1
-}
-
-},
-
-
-create:{
-
-tahun,
-
-nomorUrut:1
-
-}
-
-
-});
-
-
-
-
-
-
-
-const nomorUrut =
-String(nomor.nomorUrut)
-.padStart(2,"0");
-
-
-
-
-
-
-
-return `${nomorUrut}.${kodeJenis}.${kodeNomor}/KATI/${tanggal}.${bulan}.${tahun}`;
-
-
+  return {
+    nomorSurat,
+    nomorUrut: counter.nomorUrut,
+    kodeJenis,
+    kodeNomor,
+    tahun,
+  };
 }

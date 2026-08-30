@@ -1,752 +1,681 @@
-import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import Link from "next/link";
 
-
-
-async function prosesApproval(formData:FormData){
-
-"use server";
-
-
-const session = await getSession();
-
-
-if(!session){
-redirect("/login");
-}
-
-
-
-
-if(
-session.role !== "SUPERADMIN" &&
-session.role !== "ADMIN_SEKRETARIS"
-){
-
-redirect("/dashboard");
-
-}
-
-
-
-
-
-const id =
-String(formData.get("id"));
-
-
-
-const status =
-String(formData.get("status"));
-
-
-
-const catatan =
-String(
-formData.get("catatan") || ""
-);
-
-
-
-
-
-await prisma.$transaction(async(tx)=>{
-
-
-
-await tx.pengajuanSurat.update({
-
-where:{
-id
-},
-
-data:{
-status:status as any
-}
-
-});
-
-
-
-
-
-
-
-await tx.approval.create({
-
-data:{
-
-
-modul:"PENGAJUAN_SURAT",
-
-
-dataId:id,
-
-
-status:status as any,
-
-
-catatan,
-
-
-userId:String(session.id)
-
-
-}
-
-
-});
-
-
-
-
-
-
-
-await tx.auditLog.create({
-
-data:{
-
-
-userId:String(session.id),
-
-
-aktivitas:
-`${status} pengajuan surat ${id}`
-
-
-}
-
-
-});
-
-
-
-});
-
-
-
-
-
-
-revalidatePath("/approval");
-
-revalidatePath("/surat");
-
-revalidatePath(`/surat/${id}`);
-
-
-
-}
-
-
-
-
-
-
-
+import {
+  ClipboardCheck,
+  Clock3,
+  UserRound,
+  FileText,
+  ArrowUpRight,
+  CheckCircle2,
+} from "lucide-react";
+
+import { prisma } from "@/lib/prisma";
+
+import {
+  requireSekretaris,
+} from "@/lib/permissions";
+
+import {
+  mulaiProses,
+  setujuiPengajuan,
+  tolakPengajuan,
+} from "./actions";
 
 
 function StatusBadge({
-status
-}:{
-status:string
-}){
+  status,
+}: {
+  status: string;
+}) {
+
+  const style: Record<string, string> = {
+    DIAJUKAN:
+      "bg-amber-50 text-amber-700 border-amber-200",
+
+    DIPROSES:
+      "bg-cyan-50 text-cyan-700 border-cyan-200",
+
+    DISETUJUI:
+      "bg-emerald-50 text-emerald-700 border-emerald-200",
+
+    DITOLAK:
+      "bg-red-50 text-red-700 border-red-200",
+  };
 
 
-const style:any={
-
-
-DIAJUKAN:
-"bg-yellow-500/20 text-yellow-400",
-
-
-DISETUJUI:
-"bg-green-500/20 text-green-400",
-
-
-DITOLAK:
-"bg-red-500/20 text-red-400",
-
-
-DIPROSES:
-"bg-blue-500/20 text-blue-400"
-
-
-};
-
-
-
-return (
-
-<span
-
-className={`
-px-3
-py-1
-rounded-full
-text-sm
-${style[status] || style.DIAJUKAN}
-`}
-
->
-
-{status}
-
-</span>
-
-)
-
+  return (
+    <span
+      className={`
+        inline-flex
+        items-center
+        rounded-full
+        border
+        px-2.5
+        py-1
+        text-xs
+        font-semibold
+        ${style[status] ?? "bg-slate-50 text-slate-600 border-slate-200"}
+      `}
+    >
+      {status}
+    </span>
+  );
 }
 
 
 
+export default async function ApprovalPage() {
+
+  await requireSekretaris();
 
 
+  const data =
+    await prisma.pengajuanSurat.findMany({
+
+      where: {
+        status: {
+          in: [
+            "DIAJUKAN",
+            "DIPROSES",
+            "DISETUJUI",
+          ],
+        },
+      },
+
+      include: {
+        user: true,
+        suratKeluar: true,
+      },
+
+      orderBy: {
+        createdAt: "desc",
+      },
+
+    });
 
 
+  const menunggu =
+    data.filter(
+      (item) =>
+        item.status === "DIAJUKAN"
+    ).length;
 
 
-export default async function ApprovalPage(){
+  const diproses =
+    data.filter(
+      (item) =>
+        item.status === "DIPROSES"
+    ).length;
 
 
+  const disetujui =
+    data.filter(
+      (item) =>
+        item.status === "DISETUJUI"
+    ).length;
 
-const session =
-await getSession();
+
+  return (
+    <div className="space-y-8">
+
+      {/* HEADER */}
+
+      <section>
+
+        <p className="text-sm font-medium text-cyan-600">
+          Persuratan
+        </p>
+
+        <h1
+          className="
+            mt-1
+            text-2xl
+            font-extrabold
+            tracking-tight
+            text-slate-900
+            sm:text-3xl
+          "
+        >
+          Approval Surat
+        </h1>
+
+        <p className="mt-2 text-sm text-slate-500">
+          Review dan proses pengajuan administrasi organisasi.
+        </p>
+
+      </section>
 
 
+      {/* SUMMARY */}
 
-if(!session){
+      <section
+        className="
+          grid
+          grid-cols-1
+          gap-4
+          sm:grid-cols-3
+        "
+      >
 
-redirect("/login");
+        <SummaryCard
+          icon={<Clock3 size={20} />}
+          label="Menunggu Review"
+          value={menunggu}
+        />
 
+        <SummaryCard
+          icon={<ClipboardCheck size={20} />}
+          label="Sedang Diproses"
+          value={diproses}
+        />
+
+        <SummaryCard
+          icon={<CheckCircle2 size={20} />}
+          label="Siap Diterbitkan"
+          value={disetujui}
+        />
+
+      </section>
+
+
+      {/* LIST */}
+
+      <section>
+
+        <div className="mb-5">
+
+          <h2 className="text-xl font-bold text-slate-900">
+            Daftar Pengajuan
+          </h2>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Pengajuan yang membutuhkan tindak lanjut sekretaris.
+          </p>
+
+        </div>
+
+
+        {data.length === 0 ? (
+
+          <div
+            className="
+              rounded-3xl
+              border
+              border-slate-200
+              bg-white
+              px-6
+              py-14
+              text-center
+              shadow-sm
+            "
+          >
+
+            <div
+              className="
+                mx-auto
+                flex
+                h-14
+                w-14
+                items-center
+                justify-center
+                rounded-2xl
+                bg-cyan-50
+                text-cyan-600
+              "
+            >
+              <ClipboardCheck size={24} />
+            </div>
+
+            <h3 className="mt-4 font-semibold text-slate-900">
+              Tidak ada pengajuan
+            </h3>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Semua pengajuan sudah ditindaklanjuti.
+            </p>
+
+          </div>
+
+        ) : (
+
+          <div className="space-y-4">
+
+            {data.map((item) => (
+
+              <article
+                key={item.id}
+                className="
+                  rounded-3xl
+                  border
+                  border-slate-200
+                  bg-white
+                  p-5
+                  shadow-sm
+                  sm:p-6
+                "
+              >
+
+                <div
+                  className="
+                    flex
+                    flex-col
+                    gap-5
+                    lg:flex-row
+                    lg:items-start
+                    lg:justify-between
+                  "
+                >
+
+                  {/* INFO */}
+
+                  <div className="min-w-0 flex-1">
+
+                    <div
+                      className="
+                        flex
+                        flex-wrap
+                        items-center
+                        gap-2
+                      "
+                    >
+
+                      <StatusBadge
+                        status={item.status}
+                      />
+
+                      <span className="text-xs text-slate-400">
+                        {item.createdAt.toLocaleDateString(
+                          "id-ID",
+                          {
+                            day: "2-digit",
+                            month: "long",
+                            year: "numeric",
+                          }
+                        )}
+                      </span>
+
+                    </div>
+
+
+                    <h3
+                      className="
+                        mt-4
+                        text-lg
+                        font-bold
+                        text-slate-900
+                      "
+                    >
+                      {item.jenis}
+                    </h3>
+
+
+                    <div
+                      className="
+                        mt-4
+                        grid
+                        grid-cols-1
+                        gap-3
+                        sm:grid-cols-2
+                      "
+                    >
+
+                      <Info
+                        icon={<UserRound size={16} />}
+                        label="Pemohon"
+                        value={item.user.nama}
+                      />
+
+                      <Info
+                        icon={<FileText size={16} />}
+                        label="Tujuan"
+                        value={item.tujuan}
+                      />
+
+                    </div>
+
+
+                    <div
+                      className="
+                        mt-4
+                        rounded-2xl
+                        bg-slate-50
+                        p-4
+                      "
+                    >
+
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Keperluan
+                      </p>
+
+                      <p className="mt-1 text-sm leading-relaxed text-slate-700">
+                        {item.keperluan}
+                      </p>
+
+                    </div>
+
+                  </div>
+
+
+                  {/* ACTION */}
+
+                  <div
+                    className="
+                      flex
+                      w-full
+                      flex-col
+                      gap-2
+                      lg:w-[230px]
+                    "
+                  >
+
+                    <Link
+                      href={`/surat/${item.id}`}
+                      className="
+                        flex
+                        items-center
+                        justify-center
+                        gap-2
+                        rounded-xl
+                        border
+                        border-slate-200
+                        bg-white
+                        px-4
+                        py-2.5
+                        text-sm
+                        font-semibold
+                        text-slate-700
+                        transition
+                        hover:bg-slate-50
+                      "
+                    >
+                      Lihat Detail
+                      <ArrowUpRight size={16} />
+                    </Link>
+
+
+                    {item.status === "DIAJUKAN" && (
+
+                      <form action={mulaiProses}>
+
+                        <input
+                          type="hidden"
+                          name="id"
+                          value={item.id}
+                        />
+
+                        <button
+                          className="
+                            w-full
+                            rounded-xl
+                            bg-cyan-600
+                            px-4
+                            py-2.5
+                            text-sm
+                            font-semibold
+                            text-white
+                            transition
+                            hover:bg-cyan-700
+                          "
+                        >
+                          Mulai Proses
+                        </button>
+
+                      </form>
+
+                    )}
+
+
+                    {item.status === "DIPROSES" && (
+
+                      <>
+
+                        <form
+                          action={setujuiPengajuan}
+                          className="space-y-2"
+                        >
+
+                          <input
+                            type="hidden"
+                            name="id"
+                            value={item.id}
+                          />
+
+                          <input
+                            name="catatan"
+                            placeholder="Catatan approval (opsional)"
+                            className="
+                              w-full
+                              rounded-xl
+                              border
+                              border-slate-200
+                              bg-slate-50
+                              px-3
+                              py-2.5
+                              text-sm
+                              text-slate-900
+                              outline-none
+                              focus:border-cyan-400
+                            "
+                          />
+
+                          <button
+                            className="
+                              w-full
+                              rounded-xl
+                              bg-emerald-600
+                              px-4
+                              py-2.5
+                              text-sm
+                              font-semibold
+                              text-white
+                              transition
+                              hover:bg-emerald-700
+                            "
+                          >
+                            Setujui
+                          </button>
+
+                        </form>
+
+
+                        <form
+                          action={tolakPengajuan}
+                          className="space-y-2"
+                        >
+
+                          <input
+                            type="hidden"
+                            name="id"
+                            value={item.id}
+                          />
+
+                          <input
+                            name="catatan"
+                            required
+                            placeholder="Alasan penolakan"
+                            className="
+                              w-full
+                              rounded-xl
+                              border
+                              border-red-200
+                              bg-red-50
+                              px-3
+                              py-2.5
+                              text-sm
+                              text-slate-900
+                              outline-none
+                            "
+                          />
+
+                          <button
+                            className="
+                              w-full
+                              rounded-xl
+                              border
+                              border-red-200
+                              bg-white
+                              px-4
+                              py-2.5
+                              text-sm
+                              font-semibold
+                              text-red-600
+                              transition
+                              hover:bg-red-50
+                            "
+                          >
+                            Tolak
+                          </button>
+
+                        </form>
+
+                      </>
+
+                    )}
+
+
+                    {item.status === "DISETUJUI" && (
+
+                      item.suratKeluar ? (
+
+                        <Link
+                          href={`/surat/keluar/${item.suratKeluar.id}`}
+                          className="
+                            flex
+                            items-center
+                            justify-center
+                            rounded-xl
+                            bg-emerald-50
+                            px-4
+                            py-2.5
+                            text-sm
+                            font-semibold
+                            text-emerald-700
+                          "
+                        >
+                          Lihat Surat Keluar
+                        </Link>
+
+                      ) : (
+
+                        <div
+                          className="
+                            rounded-xl
+                            bg-amber-50
+                            px-4
+                            py-3
+                            text-center
+                            text-xs
+                            font-medium
+                            text-amber-700
+                          "
+                        >
+                          Siap diterbitkan
+                        </div>
+
+                      )
+
+                    )}
+
+                  </div>
+
+                </div>
+
+              </article>
+
+            ))}
+
+          </div>
+
+        )}
+
+      </section>
+
+    </div>
+  );
 }
 
 
 
+function SummaryCard({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+}) {
 
+  return (
+    <div
+      className="
+        rounded-3xl
+        border
+        border-slate-200
+        bg-white
+        p-5
+        shadow-sm
+      "
+    >
 
-if(
-session.role !== "SUPERADMIN" &&
-session.role !== "ADMIN_SEKRETARIS"
-){
+      <div
+        className="
+          flex
+          h-10
+          w-10
+          items-center
+          justify-center
+          rounded-xl
+          bg-cyan-50
+          text-cyan-600
+        "
+      >
+        {icon}
+      </div>
 
-redirect("/dashboard");
+      <p className="mt-4 text-sm text-slate-500">
+        {label}
+      </p>
 
+      <p className="mt-1 text-3xl font-extrabold text-slate-900">
+        {value}
+      </p>
+
+    </div>
+  );
 }
 
 
 
-
-
-
-
-const data =
-await prisma.pengajuanSurat.findMany({
-
-where:{
-
-status:"DIAJUKAN"
-
-},
-
-
-include:{
-
-user:true
-
-},
-
-
-orderBy:{
-
-createdAt:"desc"
-
-}
-
-
-});
-
-
-
-
-
-
-
-
-
-return (
-
-<div className="p-8">
-
-
-
-
-
-<div className="mb-8">
-
-
-<h1 className="
-text-3xl
-font-bold
-">
-
-Approval Surat
-
-</h1>
-
-
-<p className="
-text-gray-400
-mt-2
-">
-
-Daftar pengajuan surat yang membutuhkan persetujuan
-
-</p>
-
-
-</div>
-
-
-
-
-
-
-
-
-
-<div className="
-bg-slate-900
-border
-border-slate-800
-rounded-xl
-overflow-hidden
-">
-
-
-
-
-
-<table className="w-full">
-
-
-
-<thead className="
-bg-slate-800
-">
-
-
-<tr>
-
-
-<th className="p-4 text-left">
-Pemohon
-</th>
-
-
-<th className="p-4 text-left">
-Jenis
-</th>
-
-
-<th className="p-4 text-left">
-Keperluan
-</th>
-
-
-<th className="p-4 text-left">
-Tanggal
-</th>
-
-
-<th className="p-4 text-left">
-Status
-</th>
-
-
-<th className="p-4 text-left">
-Aksi
-</th>
-
-
-</tr>
-
-
-</thead>
-
-
-
-
-
-
-
-
-
-<tbody>
-
-
-
-{
-data.length === 0 ?
-
-
-<tr>
-
-<td
-
-colSpan={6}
-
-className="
-p-10
-text-center
-text-gray-400
-"
-
->
-
-Tidak ada pengajuan menunggu approval
-
-</td>
-
-</tr>
-
-
-:
-
-
-
-data.map((item)=>(
-
-
-
-<tr
-
-key={item.id}
-
-className="
-border-t
-border-slate-800
-hover:bg-white/5
-"
-
->
-
-
-
-
-
-
-
-<td className="p-4">
-
-
-<p className="font-semibold">
-
-{item.user.nama}
-
-</p>
-
-
-<p className="
-text-sm
-text-gray-400
-">
-
-{item.user.email}
-
-</p>
-
-
-</td>
-
-
-
-
-
-
-
-
-
-<td className="p-4">
-
-{item.jenis}
-
-</td>
-
-
-
-
-
-
-
-
-
-<td className="p-4 max-w-xs">
-
-{item.keperluan}
-
-</td>
-
-
-
-
-
-
-
-
-
-<td className="p-4">
-
-{
-item.createdAt.toLocaleDateString(
-"id-ID"
-)
-}
-
-</td>
-
-
-
-
-
-
-
-
-<td className="p-4">
-
-
-<StatusBadge
-
-status={item.status}
-
-/>
-
-
-</td>
-
-
-
-
-
-
-
-
-
-<td className="p-4">
-
-
-
-<div className="
-flex
-gap-2
-">
-
-
-
-
-
-<Link
-
-href={`/surat/${item.id}`}
-
-className="
-bg-slate-700
-hover:bg-slate-600
-px-3
-py-2
-rounded-lg
-text-sm
-"
-
->
-
-Detail
-
-</Link>
-
-
-
-
-
-
-
-
-
-<form action={prosesApproval}>
-
-
-<input
-
-type="hidden"
-
-name="id"
-
-value={item.id}
-
-/>
-
-
-<input
-
-type="hidden"
-
-name="status"
-
-value="DISETUJUI"
-
-/>
-
-
-<input
-
-type="hidden"
-
-name="catatan"
-
-value="Pengajuan disetujui"
-
-/>
-
-
-
-<button
-
-className="
-bg-green-600
-hover:bg-green-700
-px-3
-py-2
-rounded-lg
-"
-
->
-
-✓
-
-</button>
-
-
-
-</form>
-
-
-
-
-
-
-
-
-
-<form action={prosesApproval}>
-
-
-<input
-
-type="hidden"
-
-name="id"
-
-value={item.id}
-
-/>
-
-
-<input
-
-type="hidden"
-
-name="status"
-
-value="DITOLAK"
-
-/>
-
-
-<input
-
-type="hidden"
-
-name="catatan"
-
-value="Pengajuan ditolak"
-
-/>
-
-
-
-<button
-
-className="
-bg-red-600
-hover:bg-red-700
-px-3
-py-2
-rounded-lg
-"
-
->
-
-✕
-
-</button>
-
-
-
-</form>
-
-
-
-
-
-</div>
-
-
-</td>
-
-
-
-
-
-
-</tr>
-
-
-))
-
-
-}
-
-
-
-
-</tbody>
-
-
-
-
-
-
-</table>
-
-
-
-
-
-
-
-</div>
-
-
-
-
-
-</div>
-
-
-)
-
+function Info({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+
+  return (
+    <div className="flex items-start gap-2">
+
+      <div className="mt-0.5 text-slate-400">
+        {icon}
+      </div>
+
+      <div>
+
+        <p className="text-xs text-slate-400">
+          {label}
+        </p>
+
+        <p className="text-sm font-medium text-slate-700">
+          {value}
+        </p>
+
+      </div>
+
+    </div>
+  );
 }

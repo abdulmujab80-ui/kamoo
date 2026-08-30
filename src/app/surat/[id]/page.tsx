@@ -1,615 +1,1101 @@
-import { prisma } from "@/lib/prisma";
-import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { getSession } from "@/lib/auth";
-import { revalidatePath } from "next/cache";
+
+import {
+  AlertCircle,
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  Download,
+  ExternalLink,
+  FileText,
+  Mail,
+  RefreshCw,
+  Send,
+  UserRound,
+  XCircle,
+} from "lucide-react";
+
+import {
+  notFound,
+  redirect,
+} from "next/navigation";
+
+import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/permissions";
+
+import { terbitkanSurat } from "../actions";
 
 
-async function updateStatus(formData: FormData) {
-
-  "use server";
-
-
-  const session = await getSession();
-
-
-  if (!session) {
-    redirect("/login");
-  }
+type PageProps = {
+  params: Promise<{
+    id: string;
+  }>;
+};
 
 
-  const id = String(formData.get("id"));
-  const status = String(formData.get("status"));
-  const catatan = String(formData.get("catatan") || "");
-
-
-
-
-  await prisma.pengajuanSurat.update({
-
-    where: {
-      id
-    },
-
-    data: {
-      status: status as any
-    }
-
-  });
-
-
-
-
-
-  await prisma.approval.create({
-
-    data: {
-
-      modul: "PENGAJUAN_SURAT",
-
-      dataId: id,
-
-      status:
-        status === "DISETUJUI"
-          ? "DISETUJUI"
-          : "DITOLAK",
-
-      catatan,
-
-      userId: String(session.id)
-
-    }
-
-  });
-
-
-
-
-
-  await prisma.auditLog.create({
-
-    data: {
-
-      userId: String(session.id),
-
-      aktivitas:
-        `${status} pengajuan surat ${id}`
-
-    }
-
-  });
-
-
-
-
-
-  revalidatePath("/surat");
-
-  revalidatePath(`/surat/${id}`);
-
-}
-
-
-
-
-
+// ======================================================
+// STATUS BADGE
+// ======================================================
 
 function StatusBadge({
-  status
-}:{
-  status:string
-}){
-
-
-  const colors:any = {
+  status,
+}: {
+  status: string;
+}) {
+  const styles: Record<string, string> = {
+    DRAFT:
+      "border-slate-200 bg-slate-50 text-slate-600",
 
     DIAJUKAN:
-      "bg-yellow-500/20 text-yellow-400",
+      "border-amber-200 bg-amber-50 text-amber-700",
 
     DIPROSES:
-      "bg-blue-500/20 text-blue-400",
+      "border-cyan-200 bg-cyan-50 text-cyan-700",
 
     DISETUJUI:
-      "bg-green-500/20 text-green-400",
+      "border-emerald-200 bg-emerald-50 text-emerald-700",
 
     DITOLAK:
-      "bg-red-500/20 text-red-400",
+      "border-red-200 bg-red-50 text-red-700",
 
     SELESAI:
-      "bg-purple-500/20 text-purple-400"
-
+      "border-purple-200 bg-purple-50 text-purple-700",
   };
 
 
-
   return (
-
     <span
       className={`
-      px-3
-      py-1
-      rounded-full
-      ${colors[status] || colors.DIAJUKAN}
+        inline-flex
+        items-center
+        rounded-full
+        border
+        px-3
+        py-1
+        text-xs
+        font-bold
+        ${styles[status] ?? styles.DRAFT}
       `}
     >
-
       {status}
-
     </span>
-
   );
-
 }
 
 
+// ======================================================
+// FORMAT TANGGAL
+// ======================================================
+
+function formatTanggal(
+  value: Date | null | undefined
+) {
+  if (!value) {
+    return "-";
+  }
 
 
+  return value.toLocaleDateString(
+    "id-ID",
+    {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    }
+  );
+}
 
 
+// ======================================================
+// PAGE
+// ======================================================
 
-
-export default async function DetailSurat({
-
-  params
-
-}: {
-
-  params: Promise<{
-    id:string
-  }>
-
-}) {
-
+export default async function DetailPengajuanPage({
+  params,
+}: PageProps) {
+  const user = await requireAuth();
 
   const { id } = await params;
 
 
-
-  const session = await getSession();
-
-
-  if (!session) {
-
-    redirect("/login");
-
-  }
-
-
-
-
-
-
-  const surat = await prisma.pengajuanSurat.findUnique({
-
-    where: {
-      id
-    },
-
-    include: {
-      user:true
-    }
-
-  });
-
-
-
-
-
-
-  if (!surat) {
-
+  if (!id) {
     notFound();
-
   }
 
 
+  const pengajuan =
+    await prisma.pengajuanSurat.findUnique({
+      where: {
+        id,
+      },
+
+      include: {
+        user: true,
+
+        suratKeluar: true,
+      },
+    });
 
 
+  if (!pengajuan) {
+    notFound();
+  }
 
 
-
-  const approval = await prisma.approval.findMany({
-
-    where: {
-      dataId:id
-    },
-
-    include:{
-      user:true
-    },
-
-    orderBy:{
-      createdAt:"desc"
-    }
-
-  });
+  const isSekretaris =
+    user.role === "SUPERADMIN" ||
+    user.role === "ADMIN_SEKRETARIS";
 
 
+  /*
+   * User biasa hanya boleh melihat
+   * pengajuannya sendiri.
+   */
+  if (
+    !isSekretaris &&
+    pengajuan.userId !== user.id
+  ) {
+    redirect("/surat/pengajuan");
+  }
 
 
+  // ====================================================
+  // ALASAN PENOLAKAN
+  // ====================================================
+
+  const penolakan =
+    pengajuan.status === "DITOLAK"
+      ? await prisma.approval.findFirst({
+          where: {
+            dataId: pengajuan.id,
+
+            status: "DITOLAK",
+          },
+
+          include: {
+            user: {
+              select: {
+                nama: true,
+              },
+            },
+          },
+
+          orderBy: {
+            createdAt: "desc",
+          },
+        })
+      : null;
 
 
+  const suratSudahFinal =
+    pengajuan.suratKeluar?.status ===
+    "SELESAI";
 
 
   return (
+    <div
+      className="
+        mx-auto
+        max-w-6xl
+        space-y-6
+      "
+    >
 
-    <div className="p-8">
+      {/* BACK */}
 
+      <Link
+        href={
+          isSekretaris
+            ? "/approval"
+            : "/surat/pengajuan"
+        }
+        className="
+          inline-flex
+          items-center
+          gap-2
+          text-sm
+          font-semibold
+          text-slate-500
+          transition
+          hover:text-cyan-700
+        "
+      >
+        <ArrowLeft size={17} />
 
-
-      <div className="
-      flex
-      justify-between
-      items-center
-      mb-8
-      ">
-
-
-        <div>
-
-          <h1 className="
-          text-3xl
-          font-bold
-          ">
-            Detail Pengajuan Surat
-          </h1>
-
-
-          <p className="
-          text-gray-400
-          mt-2
-          ">
-            Informasi lengkap dan riwayat approval
-          </p>
-
-
-        </div>
-
+        Kembali
+      </Link>
 
 
-        <Link
+      {/* ==================================================
+          DETAIL
+      ================================================== */}
 
-          href="/surat"
+      <section
+        className="
+          overflow-hidden
+          rounded-3xl
+          border
+          border-slate-200
+          bg-white
+          shadow-sm
+        "
+      >
 
+        {/* HEADER */}
+
+        <div
           className="
-          bg-slate-800
-          px-5
-          py-3
-          rounded-lg
+            bg-gradient-to-r
+            from-cyan-600
+            to-teal-500
+            px-6
+            py-7
+            text-white
+            sm:px-8
           "
-
         >
-
-          ← Kembali
-
-        </Link>
-
-
-      </div>
-
-
-
-
-
-
-      <div className="
-      bg-slate-900
-      border
-      border-slate-800
-      rounded-xl
-      p-8
-      space-y-6
-      ">
-
-
-
-
-        <div>
-
-          <p className="text-gray-400">
-            Pemohon
-          </p>
-
-          <p className="font-semibold">
-            {surat.user.nama}
-          </p>
-
-          <p className="text-sm text-gray-500">
-            {surat.user.email}
-          </p>
-
-        </div>
-
-
-
-
-
-        <div>
-
-          <p className="text-gray-400">
-            Role
-          </p>
-
-          <p>
-            {surat.user.role}
-          </p>
-
-        </div>
-
-
-
-
-
-        <div>
-
-          <p className="text-gray-400">
-            Jenis Surat
-          </p>
-
-          <p>
-            {surat.jenis}
-          </p>
-
-        </div>
-
-
-
-
-
-        <div>
-
-          <p className="text-gray-400">
-            Tujuan
-          </p>
-
-          <p>
-            {surat.tujuan}
-          </p>
-
-        </div>
-
-
-
-
-
-        <div>
-
-          <p className="text-gray-400">
-            Keperluan
-          </p>
-
-          <p>
-            {surat.keperluan}
-          </p>
-
-        </div>
-
-
-
-
-
-        <div>
-
-          <p className="text-gray-400">
-            Tanggal Pengajuan
-          </p>
-
-          <p>
-            {surat.createdAt.toLocaleDateString("id-ID")}
-          </p>
-
-        </div>
-
-
-
-
-
-        <div>
-
-          <p className="text-gray-400 mb-2">
-            Status
-          </p>
-
-          <StatusBadge status={surat.status}/>
-
-        </div>
-
-
-
-
-
-
-
-        {
-          (
-            session.role === "SUPERADMIN" ||
-            session.role === "ADMIN_SEKRETARIS"
-          )
-          &&
-          surat.status === "DIAJUKAN"
-          &&
-          (
-
-            <div className="
-            border-t
-            border-slate-800
-            pt-6
-            flex
-            gap-3
-            ">
-
-
-              <form action={updateStatus}>
-
-                <input
-                  type="hidden"
-                  name="id"
-                  value={surat.id}
-                />
-
-                <input
-                  type="hidden"
-                  name="status"
-                  value="DISETUJUI"
-                />
-
-                <input
-                  type="hidden"
-                  name="catatan"
-                  value="Disetujui"
-                />
-
-
-                <button
-                  className="
-                  bg-green-600
-                  px-5
-                  py-3
-                  rounded-lg
-                  font-semibold
-                  "
-                >
-
-                  ✓ Setujui
-
-                </button>
-
-
-              </form>
-
-
-
-
-
-              <form action={updateStatus}>
-
-
-                <input
-                  type="hidden"
-                  name="id"
-                  value={surat.id}
-                />
-
-                <input
-                  type="hidden"
-                  name="status"
-                  value="DITOLAK"
-                />
-
-                <input
-                  type="hidden"
-                  name="catatan"
-                  value="Ditolak"
-                />
-
-
-                <button
-                  className="
-                  bg-red-600
-                  px-5
-                  py-3
-                  rounded-lg
-                  font-semibold
-                  "
-                >
-
-                  ✕ Tolak
-
-                </button>
-
-
-              </form>
-
+          <div
+            className="
+              flex
+              flex-col
+              gap-5
+              sm:flex-row
+              sm:items-start
+              sm:justify-between
+            "
+          >
+            <div>
+
+              <p className="text-sm font-semibold text-cyan-50">
+                Detail Pengajuan Surat
+              </p>
+
+
+              <h1
+                className="
+                  mt-2
+                  text-2xl
+                  font-extrabold
+                  tracking-tight
+                  sm:text-3xl
+                "
+              >
+                {pengajuan.jenis}
+              </h1>
+
+
+              <p className="mt-2 text-sm text-cyan-50">
+                Diajukan oleh{" "}
+                {pengajuan.user.nama}
+              </p>
 
             </div>
 
-          )
-        }
+
+            <StatusBadge
+              status={pengajuan.status}
+            />
+
+          </div>
+        </div>
 
 
+        <div className="p-6 sm:p-8">
 
-      </div>
+          {/* ==================================================
+              DITOLAK
+          ================================================== */}
 
-
-
-
-
-
-      <div className="
-      mt-8
-      bg-slate-900
-      border
-      border-slate-800
-      rounded-xl
-      p-8
-      ">
-
-
-        <h2 className="
-        text-xl
-        font-bold
-        mb-5
-        ">
-          Riwayat Approval
-        </h2>
-
-
-
-        {
-          approval.length === 0
-
-          ?
-
-          <p className="text-gray-400">
-            Belum ada approval
-          </p>
-
-
-          :
-
-          approval.map((item)=>(
-
+          {pengajuan.status ===
+            "DITOLAK" && (
 
             <div
-              key={item.id}
               className="
-              border-b
-              border-slate-800
-              py-4
+                mb-6
+                overflow-hidden
+                rounded-2xl
+                border
+                border-red-200
+                bg-red-50
               "
             >
 
-              <p className="font-semibold">
-                {item.status}
-              </p>
+              <div
+                className="
+                  flex
+                  items-start
+                  gap-3
+                  border-b
+                  border-red-100
+                  px-5
+                  py-4
+                "
+              >
+                <div
+                  className="
+                    flex
+                    h-10
+                    w-10
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-xl
+                    bg-white
+                    text-red-600
+                    shadow-sm
+                  "
+                >
+                  <XCircle size={20} />
+                </div>
 
-              <p className="text-sm text-gray-400">
-                Oleh: {item.user.nama}
-              </p>
 
-              <p>
-                {item.catatan}
-              </p>
+                <div>
 
-              <p className="text-xs text-gray-500">
-                {item.createdAt.toLocaleDateString("id-ID")}
-              </p>
+                  <p className="font-bold text-red-800">
+                    Pengajuan Ditolak
+                  </p>
 
+                  <p
+                    className="
+                      mt-1
+                      text-sm
+                      leading-6
+                      text-red-700
+                    "
+                  >
+                    Perbaiki pengajuan berdasarkan
+                    catatan Admin Sekretaris.
+                  </p>
+
+                </div>
+              </div>
+
+
+              <div className="p-5">
+
+                <p
+                  className="
+                    text-xs
+                    font-bold
+                    uppercase
+                    tracking-wider
+                    text-red-500
+                  "
+                >
+                  Alasan Penolakan
+                </p>
+
+
+                <p
+                  className="
+                    mt-2
+                    whitespace-pre-wrap
+                    text-sm
+                    font-medium
+                    leading-7
+                    text-red-900
+                  "
+                >
+                  {penolakan?.catatan?.trim()
+                    ? penolakan.catatan
+                    : "Tidak ada catatan penolakan."}
+                </p>
+
+
+                {penolakan && (
+
+                  <div
+                    className="
+                      mt-4
+                      flex
+                      flex-wrap
+                      gap-x-5
+                      gap-y-2
+                      border-t
+                      border-red-100
+                      pt-4
+                      text-xs
+                      text-red-600
+                    "
+                  >
+                    <span>
+                      Ditinjau oleh:{" "}
+                      <strong>
+                        {penolakan.user.nama}
+                      </strong>
+                    </span>
+
+                    <span>
+                      {formatTanggal(
+                        penolakan.createdAt
+                      )}
+                    </span>
+                  </div>
+
+                )}
+
+
+                {!isSekretaris && (
+
+                  <Link
+                    href={`/surat/pengajuan?revisi=${pengajuan.id}`}
+                    className="
+                      mt-5
+                      inline-flex
+                      items-center
+                      justify-center
+                      gap-2
+                      rounded-xl
+                      bg-red-600
+                      px-5
+                      py-3
+                      text-sm
+                      font-bold
+                      text-white
+                      shadow-sm
+                      transition
+                      hover:bg-red-700
+                    "
+                  >
+                    <RefreshCw size={17} />
+
+                    Perbaiki & Ajukan Ulang
+                  </Link>
+
+                )}
+
+              </div>
 
             </div>
 
-
-          ))
-
-        }
+          )}
 
 
+          {/* ==================================================
+              INFO
+          ================================================== */}
+
+          <div
+            className="
+              grid
+              grid-cols-1
+              gap-5
+              md:grid-cols-2
+            "
+          >
+
+            <InfoCard
+              icon={<UserRound size={19} />}
+              title="Pemohon"
+              value={pengajuan.user.nama}
+            />
+
+
+            <InfoCard
+              icon={<Mail size={19} />}
+              title="Tujuan"
+              value={pengajuan.tujuan}
+            />
+
+
+            <InfoCard
+              icon={<FileText size={19} />}
+              title="Jenis Surat"
+              value={pengajuan.jenis}
+            />
+
+
+            <InfoCard
+              icon={<Clock3 size={19} />}
+              title="Tanggal Pengajuan"
+              value={formatTanggal(
+                pengajuan.createdAt
+              )}
+            />
+
+          </div>
+
+
+          {/* KEPERLUAN */}
+
+          <div
+            className="
+              mt-6
+              rounded-2xl
+              border
+              border-slate-200
+              bg-slate-50
+              p-5
+            "
+          >
+            <p
+              className="
+                text-xs
+                font-bold
+                uppercase
+                tracking-wider
+                text-slate-400
+              "
+            >
+              Keperluan
+            </p>
+
+
+            <p
+              className="
+                mt-2
+                whitespace-pre-wrap
+                text-sm
+                leading-7
+                text-slate-700
+              "
+            >
+              {pengajuan.keperluan}
+            </p>
+          </div>
+
+
+          {/* PERIODE */}
+
+          {(
+            pengajuan.tanggalMulai ||
+            pengajuan.tanggalSelesai
+          ) && (
+
+            <div
+              className="
+                mt-5
+                grid
+                grid-cols-1
+                gap-4
+                sm:grid-cols-2
+              "
+            >
+
+              <InfoCard
+                icon={
+                  <CalendarDays size={19} />
+                }
+                title="Tanggal Mulai"
+                value={formatTanggal(
+                  pengajuan.tanggalMulai
+                )}
+              />
+
+
+              <InfoCard
+                icon={
+                  <CalendarDays size={19} />
+                }
+                title="Tanggal Selesai"
+                value={formatTanggal(
+                  pengajuan.tanggalSelesai
+                )}
+              />
+
+            </div>
+
+          )}
+
+
+          {/* ==================================================
+              SURAT TERBIT / FINAL
+          ================================================== */}
+
+          {pengajuan.suratKeluar && (
+
+            <div
+              className="
+                mt-6
+                rounded-2xl
+                border
+                border-emerald-200
+                bg-emerald-50
+                p-5
+              "
+            >
+
+              <div
+                className="
+                  flex
+                  flex-col
+                  gap-5
+                  lg:flex-row
+                  lg:items-center
+                  lg:justify-between
+                "
+              >
+
+                <div>
+
+                  <div
+                    className="
+                      flex
+                      items-center
+                      gap-2
+                      font-bold
+                      text-emerald-800
+                    "
+                  >
+                    <CheckCircle2 size={19} />
+
+                    {suratSudahFinal
+                      ? "Surat Telah Selesai"
+                      : "Surat Telah Diterbitkan"}
+                  </div>
+
+
+                  <p
+                    className="
+                      mt-3
+                      text-xs
+                      font-bold
+                      uppercase
+                      tracking-wider
+                      text-emerald-600
+                    "
+                  >
+                    Nomor Surat
+                  </p>
+
+
+                  <p
+                    className="
+                      mt-1
+                      break-words
+                      text-sm
+                      font-bold
+                      text-slate-900
+                    "
+                  >
+                    {
+                      pengajuan
+                        .suratKeluar
+                        .nomorSurat
+                    }
+                  </p>
+
+
+                  {!suratSudahFinal &&
+                    !isSekretaris && (
+
+                    <p
+                      className="
+                        mt-2
+                        text-sm
+                        text-emerald-700
+                      "
+                    >
+                      Surat masih difinalisasi oleh
+                      Admin Sekretaris. PDF final
+                      tersedia setelah proses selesai.
+                    </p>
+
+                  )}
+
+                </div>
+
+
+                {/* USER: PDF FINAL */}
+
+                {!isSekretaris &&
+                  suratSudahFinal && (
+
+                  <div
+                    className="
+                      flex
+                      w-full
+                      flex-col
+                      gap-2
+                      sm:w-auto
+                      sm:flex-row
+                    "
+                  >
+
+                    <a
+                      href={`/api/surat/keluar/${pengajuan.suratKeluar.id}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="
+                        inline-flex
+                        items-center
+                        justify-center
+                        gap-2
+                        rounded-xl
+                        border
+                        border-emerald-200
+                        bg-white
+                        px-4
+                        py-3
+                        text-sm
+                        font-bold
+                        text-emerald-700
+                        transition
+                        hover:bg-emerald-100
+                      "
+                    >
+                      <ExternalLink size={16} />
+
+                      Buka PDF
+                    </a>
+
+
+                    <a
+                      href={`/api/surat/keluar/${pengajuan.suratKeluar.id}/pdf?download=1`}
+                      className="
+                        inline-flex
+                        items-center
+                        justify-center
+                        gap-2
+                        rounded-xl
+                        bg-emerald-600
+                        px-4
+                        py-3
+                        text-sm
+                        font-bold
+                        text-white
+                        shadow-sm
+                        transition
+                        hover:bg-emerald-700
+                      "
+                    >
+                      <Download size={16} />
+
+                      Download PDF
+                    </a>
+
+                  </div>
+
+                )}
+
+
+                {/* SEKRETARIS */}
+
+                {isSekretaris && (
+
+                  <Link
+                    href={`/surat/keluar/${pengajuan.suratKeluar.id}`}
+                    className="
+                      inline-flex
+                      items-center
+                      justify-center
+                      rounded-xl
+                      bg-emerald-600
+                      px-5
+                      py-3
+                      text-sm
+                      font-bold
+                      text-white
+                      transition
+                      hover:bg-emerald-700
+                    "
+                  >
+                    Kelola Surat Keluar
+                  </Link>
+
+                )}
+
+              </div>
+
+            </div>
+
+          )}
+
+        </div>
+
+      </section>
+
+
+      {/* ==================================================
+          SEKRETARIS
+      ================================================== */}
+
+      {isSekretaris && (
+
+        <section
+          className="
+            rounded-3xl
+            border
+            border-slate-200
+            bg-white
+            p-6
+            shadow-sm
+            sm:p-7
+          "
+        >
+
+          <h2 className="text-lg font-bold text-slate-900">
+            Penerbitan Surat
+          </h2>
+
+
+          <p className="mt-1 text-sm text-slate-500">
+            Surat hanya dapat diterbitkan setelah
+            pengajuan disetujui.
+          </p>
+
+
+          {pengajuan.status ===
+            "DIAJUKAN" && (
+
+            <InfoStatus
+              type="warning"
+              title="Menunggu review"
+              description="Pengajuan belum mulai diproses."
+            />
+
+          )}
+
+
+          {pengajuan.status ===
+            "DIPROSES" &&
+            !pengajuan.suratKeluar && (
+
+            <InfoStatus
+              type="info"
+              title="Sedang diproses"
+              description="Pengajuan sedang dalam tahap review sekretaris."
+            />
+
+          )}
+
+
+          {pengajuan.status ===
+            "DITOLAK" && (
+
+            <InfoStatus
+              type="error"
+              title="Pengajuan ditolak"
+              description="Pengajuan ini tidak dapat diterbitkan menjadi Surat Keluar."
+            />
+
+          )}
+
+
+          {pengajuan.status ===
+            "DISETUJUI" &&
+            !pengajuan.suratKeluar && (
+
+            <div
+              className="
+                mt-5
+                flex
+                flex-col
+                gap-4
+                rounded-2xl
+                border
+                border-emerald-200
+                bg-emerald-50
+                p-5
+                sm:flex-row
+                sm:items-center
+                sm:justify-between
+              "
+            >
+
+              <div>
+
+                <p className="font-bold text-emerald-800">
+                  Siap diterbitkan
+                </p>
+
+                <p
+                  className="
+                    mt-1
+                    text-sm
+                    leading-6
+                    text-emerald-700
+                  "
+                >
+                  Nomor resmi akan dibuat otomatis
+                  saat surat diterbitkan.
+                </p>
+
+              </div>
+
+
+              <form action={terbitkanSurat}>
+
+                <input
+                  type="hidden"
+                  name="pengajuanId"
+                  value={pengajuan.id}
+                />
+
+
+                <button
+                  type="submit"
+                  className="
+                    inline-flex
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-xl
+                    bg-emerald-600
+                    px-5
+                    py-3
+                    text-sm
+                    font-bold
+                    text-white
+                    shadow-sm
+                    transition
+                    hover:bg-emerald-700
+                  "
+                >
+                  <Send size={17} />
+
+                  Terbitkan Surat
+                </button>
+
+              </form>
+
+            </div>
+
+          )}
+
+        </section>
+
+      )}
+
+    </div>
+  );
+}
+
+
+// ======================================================
+// INFO CARD
+// ======================================================
+
+function InfoCard({
+  icon,
+  title,
+  value,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string;
+}) {
+  return (
+    <div
+      className="
+        flex
+        gap-3
+        rounded-2xl
+        border
+        border-slate-200
+        bg-white
+        p-4
+      "
+    >
+      <div
+        className="
+          flex
+          h-10
+          w-10
+          shrink-0
+          items-center
+          justify-center
+          rounded-xl
+          bg-cyan-50
+          text-cyan-600
+        "
+      >
+        {icon}
       </div>
 
 
+      <div className="min-w-0">
+
+        <p className="text-xs font-medium text-slate-400">
+          {title}
+        </p>
+
+        <p
+          className="
+            mt-1
+            break-words
+            text-sm
+            font-semibold
+            text-slate-800
+          "
+        >
+          {value}
+        </p>
+
+      </div>
 
     </div>
-
   );
+}
 
+
+// ======================================================
+// INFO STATUS
+// ======================================================
+
+function InfoStatus({
+  type,
+  title,
+  description,
+}: {
+  type:
+    | "warning"
+    | "info"
+    | "error";
+
+  title: string;
+  description: string;
+}) {
+  const styles = {
+    warning:
+      "border-amber-200 bg-amber-50 text-amber-800",
+
+    info:
+      "border-cyan-200 bg-cyan-50 text-cyan-800",
+
+    error:
+      "border-red-200 bg-red-50 text-red-800",
+  };
+
+
+  return (
+    <div
+      className={`
+        mt-5
+        rounded-2xl
+        border
+        p-5
+        ${styles[type]}
+      `}
+    >
+      <div className="flex items-start gap-3">
+
+        <AlertCircle
+          size={19}
+          className="mt-0.5 shrink-0"
+        />
+
+        <div>
+
+          <p className="font-bold">
+            {title}
+          </p>
+
+          <p
+            className="
+              mt-1
+              text-sm
+              leading-6
+              opacity-80
+            "
+          >
+            {description}
+          </p>
+
+        </div>
+
+      </div>
+    </div>
+  );
 }

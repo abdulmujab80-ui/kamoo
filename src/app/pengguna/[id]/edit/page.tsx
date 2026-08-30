@@ -1,719 +1,171 @@
-import { prisma } from "@/lib/prisma";
-import { redirect, notFound } from "next/navigation";
-import { getSession } from "@/lib/auth";
-import { revalidatePath } from "next/cache";
-import bcrypt from "bcrypt";
 import Link from "next/link";
 
-
-
-
-
-async function updateUser(
-formData: FormData
-){
-
-"use server";
-
-
-
-const session =
-await getSession();
-
-
-
-if(!session){
-
-redirect("/login");
-
-}
-
-
-
-if(session.role !== "SUPERADMIN"){
-
-redirect("/dashboard");
-
-}
-
-
-
-
-const id =
-String(formData.get("id"));
-
-
-
-const nama =
-String(formData.get("nama"))
-.trim();
-
-
-
-const email =
-String(formData.get("email"))
-.toLowerCase()
-.trim();
-
-
-
-const role =
-String(formData.get("role"));
-
-
-
-const aktif =
-String(formData.get("aktif"))
-===
-"true";
-
-
-
-const password =
-String(formData.get("password") || "");
-
-
-
-
-
-
-const existing =
-await prisma.user.findFirst({
-
-where:{
-
-email,
-
-NOT:{
-id
-}
-
-}
-
-});
-
-
-
-
-if(existing){
-
-throw new Error(
-"Email sudah digunakan"
-);
-
-}
-
-
-
-
-
-
-let updateData:any={
-
-
-nama,
-
-email,
-
-role:role as any,
-
-aktif
-
+import {
+  ArrowLeft,
+  Image,
+  ShieldCheck,
+} from "lucide-react";
+
+import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/auth";
+
+import {
+  notFound,
+  redirect,
+} from "next/navigation";
+
+import {
+  RoleBadge,
+  StatusBadge,
+  UserAvatar,
+} from "../../components/UserUI";
+
+import UserEditForm from "../../components/UserEditForm";
+
+type PageProps = {
+  params: Promise<{
+    id: string;
+  }>;
 };
 
-
-
-
-
-
-
-if(password){
-
-if(password.length < 6){
-
-throw new Error(
-"Password minimal 6 karakter"
-);
-
-}
-
-
-
-updateData.password =
-await bcrypt.hash(
-password,
-10
-);
-
-
-}
-
-
-
-
-
-
-
-
-
-const user =
-await prisma.user.update({
-
-where:{
-id
-},
-
-data:updateData
-
-});
-
-
-
-
-
-
-
-await prisma.auditLog.create({
-
-data:{
-
-
-userId:String(session.id),
-
-
-aktivitas:
-`Mengubah data pengguna ${user.nama}`
-
-
-}
-
-});
-
-
-
-
-
-
-
-
-revalidatePath("/pengguna");
-
-revalidatePath(
-`/pengguna/${id}`
-);
-
-
-redirect(
-`/pengguna/${id}`
-);
-
-
-
-}
-
-
-
-
-
-
-
-
-
-export default async function EditUser({
-
-params
-
-}:{
-params:{
-id:string
-}
-}){
-
-
-
-
-
-const session =
-await getSession();
-
-
-
-if(!session){
-
-redirect("/login");
-
-}
-
-
-
-
-if(session.role !== "SUPERADMIN"){
-
-redirect("/dashboard");
-
-}
-
-
-
-
-
-
-
-const user =
-await prisma.user.findUnique({
-
-where:{
-id:params.id
-}
-
-});
-
-
-
-
-
-if(!user){
-
-notFound();
-
-}
-
-
-
-
-
-
-
-return (
-
-<div className="p-8">
-
-
-
-
-
-
-<div className="
-flex
-justify-between
-items-center
-mb-8
-">
-
-
-<div>
-
-<h1 className="
-text-3xl
-font-bold
-">
-
-Edit Pengguna
-
-</h1>
-
-
-<p className="
-text-gray-400
-mt-2
-">
-
-Kelola informasi dan hak akses pengguna
-
-</p>
-
-
-</div>
-
-
-
-
-
-<Link
-
-href={`/pengguna/${user.id}`}
-
-className="
-bg-slate-700
-px-5
-py-3
-rounded-lg
-"
-
->
-
-← Kembali
-
-</Link>
-
-
-
-</div>
-
-
-
-
-
-
-
-
-
-<form
-
-action={updateUser}
-
-className="
-bg-slate-900
-border
-border-slate-800
-rounded-xl
-p-8
-max-w-xl
-space-y-6
-"
-
->
-
-
-
-<input
-
-type="hidden"
-
-name="id"
-
-value={user.id}
-
-/>
-
-
-
-
-
-
-
-<div>
-
-<label className="
-text-gray-300
-">
-
-Nama Lengkap
-
-</label>
-
-
-<input
-
-name="nama"
-
-defaultValue={user.nama}
-
-required
-
-className="
-w-full
-mt-2
-p-3
-rounded-lg
-bg-slate-800
-border
-border-slate-700
-"
-
- />
-
-
-</div>
-
-
-
-
-
-
-
-
-<div>
-
-<label className="
-text-gray-300
-">
-
-Email
-
-</label>
-
-
-<input
-
-type="email"
-
-name="email"
-
-defaultValue={user.email}
-
-required
-
-className="
-w-full
-mt-2
-p-3
-rounded-lg
-bg-slate-800
-border
-border-slate-700
-"
-
- />
-
-
-</div>
-
-
-
-
-
-
-
-
-<div>
-
-<label className="
-text-gray-300
-">
-
-Role
-
-</label>
-
-
-<select
-
-name="role"
-
-defaultValue={user.role}
-
-className="
-w-full
-mt-2
-p-3
-rounded-lg
-bg-slate-800
-border
-border-slate-700
-"
-
->
-
-
-<option value="ANGGOTA">
-Anggota
-</option>
-
-
-<option value="PENGURUS">
-Pengurus
-</option>
-
-
-<option value="ADMIN_SEKRETARIS">
-Admin Sekretaris
-</option>
-
-
-<option value="ADMIN_BENDAHARA">
-Admin Bendahara
-</option>
-
-
-<option value="SUPERADMIN">
-Superadmin
-</option>
-
-
-
-</select>
-
-
-</div>
-
-
-
-
-
-
-
-
-<div>
-
-<label className="
-text-gray-300
-">
-
-Status Akun
-
-</label>
-
-
-<select
-
-name="aktif"
-
-defaultValue={
-String(user.aktif)
-}
-
-className="
-w-full
-mt-2
-p-3
-rounded-lg
-bg-slate-800
-border
-border-slate-700
-"
-
->
-
-
-<option value="true">
-Aktif
-</option>
-
-
-<option value="false">
-Nonaktif
-</option>
-
-
-
-</select>
-
-
-
-</div>
-
-
-
-
-
-
-
-
-
-<div>
-
-<label className="
-text-gray-300
-">
-
-Reset Password
-<span className="
-text-gray-500
-text-sm
-"
->
- (opsional)
-</span>
-
-</label>
-
-
-<input
-
-type="password"
-
-name="password"
-
-placeholder="Kosongkan jika tidak ingin mengganti"
-
-className="
-w-full
-mt-2
-p-3
-rounded-lg
-bg-slate-800
-border
-border-slate-700
-"
-
- />
-
-
-</div>
-
-
-
-
-
-
-
-
-
-<div className="
-flex
-gap-4
-pt-5
-border-t
-border-slate-800
-">
-
-
-<button
-
-className="
-bg-cyan-600
-hover:bg-cyan-700
-px-6
-py-3
-rounded-lg
-font-semibold
-"
-
->
-
-Simpan Perubahan
-
-</button>
-
-
-
-
-<Link
-
-href={`/pengguna/${user.id}`}
-
-className="
-bg-slate-700
-px-6
-py-3
-rounded-lg
-"
-
->
-
-Batal
-
-</Link>
-
-
-
-</div>
-
-
-
-
-
-
-</form>
-
-
-
-
-
-
-</div>
-
-)
-
+export default async function EditPenggunaPage({
+  params,
+}: PageProps) {
+  const session = await getSession();
+
+  if (!session) {
+    redirect("/login");
+  }
+
+  if (String(session.role) !== "SUPERADMIN") {
+    redirect("/dashboard");
+  }
+
+  const { id } = await params;
+
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      nama: true,
+      email: true,
+      role: true,
+      aktif: true,
+      fotoProfil: true,
+    },
+  });
+
+  if (!user) {
+    notFound();
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-4xl space-y-7">
+      <Link
+        href={`/pengguna/${user.id}`}
+        className="
+          inline-flex items-center gap-2 text-sm font-semibold
+          text-slate-500 transition hover:text-cyan-700
+        "
+      >
+        <ArrowLeft size={17} />
+        Kembali ke Detail
+      </Link>
+
+      <section
+        className="
+          rounded-3xl border border-slate-200
+          bg-white p-5 shadow-sm sm:p-6
+        "
+      >
+        <div
+          className="
+            flex flex-col gap-5 sm:flex-row
+            sm:items-center sm:justify-between
+          "
+        >
+          <div className="flex items-center gap-4">
+            <UserAvatar
+              url={user.fotoProfil}
+              nama={user.nama}
+              size="md"
+            />
+
+            <div>
+              <p
+                className="
+                  text-xs font-bold uppercase tracking-[0.15em]
+                  text-cyan-600
+                "
+              >
+                Edit Pengguna
+              </p>
+              <h1
+                className="
+                  mt-1 text-xl font-extrabold
+                  text-slate-900 sm:text-2xl
+                "
+              >
+                {user.nama}
+              </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                {user.email}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <RoleBadge role={user.role} />
+            <StatusBadge aktif={user.aktif} />
+          </div>
+        </div>
+
+        <div
+          className="
+            mt-5 flex items-start gap-2 rounded-2xl
+            border border-cyan-100 bg-cyan-50/60
+            px-4 py-3 text-xs leading-5 text-cyan-800
+          "
+        >
+          <Image size={16} className="mt-0.5 shrink-0" />
+          Foto profil dikelola sendiri oleh pengguna
+          melalui menu Profil Saya.
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-4">
+          <h2 className="text-lg font-bold text-slate-900">
+            Pengaturan Akun
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Perbarui identitas, role, status, atau reset password
+            pengguna.
+          </p>
+        </div>
+
+        <UserEditForm
+          user={{
+            id: user.id,
+            nama: user.nama,
+            email: user.email,
+            role: user.role,
+            aktif: user.aktif,
+          }}
+        />
+      </section>
+
+      <section
+        className="
+          flex items-start gap-3 rounded-2xl border
+          border-amber-200 bg-amber-50 p-4
+          text-sm leading-6 text-amber-800
+        "
+      >
+        <ShieldCheck size={18} className="mt-0.5 shrink-0" />
+        Sistem mencegah Superadmin terakhir dinonaktifkan
+        atau diturunkan rolenya.
+      </section>
+    </div>
+  );
 }

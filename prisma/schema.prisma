@@ -2,457 +2,385 @@ generator client {
   provider = "prisma-client-js"
 }
 
-
 datasource db {
-  provider = "postgresql"
-  url      = env("DIRECT_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-
+// ======================================================
+// ENUM
+// ======================================================
 
 enum Role {
-
   SUPERADMIN
-
   ADMIN_SEKRETARIS
-
   ADMIN_BENDAHARA
-
   PENGURUS
-
   ANGGOTA
-
 }
-
-
 
 enum StatusSurat {
-
   DRAFT
-
   DIAJUKAN
-
   DIPROSES
-
   DISETUJUI
-
   DITOLAK
-
   SELESAI
-
 }
-
-
 
 enum StatusApproval {
-
   MENUNGGU
-
   DISETUJUI
-
   DITOLAK
-
 }
 
-
+enum StatusReimburse {
+  MENUNGGU
+  DISETUJUI
+  DITOLAK
+  DIBAYAR
+}
 
 enum JenisTransaksi {
-
   MASUK
-
   KELUAR
-
 }
 
+// ======================================================
+// LOKER ENUM
+// ======================================================
 
+enum LokerPermission {
+  VIEWER
+  EDITOR
+}
 
+enum StorageProvider {
+  GOOGLE_DRIVE
+}
 
+// ======================================================
+// USER
+// ======================================================
 
 model User {
-
-  id String @id @default(uuid())
-
-  nama String
-
-  email String @unique
-
+  id       String  @id @default(uuid())
+  nama     String
+  email    String  @unique
   password String
+  role     Role
+  aktif    Boolean @default(true)
 
-  role Role
-
-  aktif Boolean @default(true)
+  fotoProfil     String?
+  fotoProfilPath String?
 
   createdAt DateTime @default(now())
-
   updatedAt DateTime @updatedAt
 
-
   pengajuanSurat PengajuanSurat[]
+  reimburse      Reimburse[]
+  approvals      Approval[]
+  audit          AuditLog[]
 
-  reimburse Reimburse[]
-
-  approvals Approval[]
-
-  audit AuditLog[]
-
+  loker       Loker?
+  lokerShares LokerShare[]
 }
 
-
-
-
-
-
+// ======================================================
+// SURAT MASUK
+// ======================================================
 
 model SuratMasuk {
-
-  id String @id @default(uuid())
-
-  nomorSurat String
-
+  id           String      @id @default(uuid())
+  nomorSurat   String
   tanggalSurat DateTime
-
-  asal String
-
-  perihal String
-
-  fileUrl String?
-
-  status StatusSurat @default(DIAJUKAN)
-
-  createdAt DateTime @default(now())
-
+  asal         String
+  perihal      String
+  fileUrl      String?
+  status       StatusSurat @default(DIAJUKAN)
+  createdAt    DateTime    @default(now())
 }
 
+// ======================================================
+// PENGAJUAN SURAT
+// ======================================================
 
+model PengajuanSurat {
+  id     String @id @default(uuid())
+  userId String
+  jenis  String
 
+  kodeJenis String?
+  kodeNomor String?
 
+  tujuan         String
+  keperluan      String
+  isiSurat       String?
+  tanggalMulai   DateTime?
+  tanggalSelesai DateTime?
+  fileUrl        String?
+  status         StatusSurat @default(DIAJUKAN)
+  createdAt      DateTime    @default(now())
 
+  user        User         @relation(fields: [userId], references: [id])
+  suratKeluar SuratKeluar?
 
+  @@index([userId])
+  @@index([status])
+}
+
+// ======================================================
+// SURAT KELUAR
+// ======================================================
 
 model SuratKeluar {
-
-
-  id String @id @default(uuid())
-
-
+  id         String @id @default(uuid())
   nomorSurat String @unique
 
+  kodeJenis String?
+  kodeNomor String?
 
-  kodeJenis String
-
-
-  kodeNomor String
-
-
-  tujuan String
-
-
-  perihal String
-
-
-  isiSurat String
-
-
+  tujuan       String
+  perihal      String
+  isiSurat     String
   tanggalSurat DateTime
-
-
-  fileUrl String?
-
-
-  status StatusSurat @default(DRAFT)
-
-
+  fileUrl      String?
+  status       StatusSurat @default(DRAFT)
+  createdAt    DateTime    @default(now())
 
   pengajuanId String? @unique
 
+  pengajuan PengajuanSurat? @relation(fields: [pengajuanId], references: [id])
 
-  pengajuan PengajuanSurat? @relation(
-    fields: [pengajuanId],
-    references: [id]
-  )
-
-
-  createdAt DateTime @default(now())
-
+  @@index([status])
 }
 
-
-
-
-
-
-
-model PengajuanSurat {
-
-
-  id String @id @default(uuid())
-
-
-  userId String
-
-
-  jenis String
-
-
-  kodeJenis String?
-
-
-  kodeNomor String?
-
-
-  tujuan String
-
-
-  keperluan String
-
-
-  isiSurat String?
-
-
-  tanggalMulai DateTime?
-
-
-  tanggalSelesai DateTime?
-
-
-  fileUrl String?
-
-
-  status StatusSurat @default(DIAJUKAN)
-
-
-
-  user User @relation(
-    fields:[userId],
-    references:[id]
-  )
-
-
-  suratKeluar SuratKeluar?
-
-
-  createdAt DateTime @default(now())
-
-
-}
-
-
-
-
-
-
+// ======================================================
+// COUNTER NOMOR SURAT
+// ======================================================
 
 model NomorSurat {
-
-
-  id String @id @default(uuid())
-
-
-  tahun Int @unique
-
-
-  nomorUrut Int @default(0)
-
-
+  id        String   @id @default(uuid())
+  tahun     Int      @unique
+  nomorUrut Int      @default(0)
   createdAt DateTime @default(now())
-
-
 }
 
-
-
-
-
-
+// ======================================================
+// REIMBURSE
+// ======================================================
 
 model Reimburse {
-
-
-  id String @id @default(uuid())
-
-
-  userId String
-
-
+  id         String          @id @default(uuid())
+  userId     String
   keterangan String
+  jumlah     Float
+  buktiUrl   String?
+  status     StatusReimburse @default(MENUNGGU)
+  catatan    String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
 
+  user User @relation(fields: [userId], references: [id])
 
-  jumlah Float
+  keuangan Keuangan?
 
-
-  buktiUrl String?
-
-
-  status StatusApproval @default(MENUNGGU)
-
-
-
-  user User @relation(
-    fields:[userId],
-    references:[id]
-  )
-
-
-  createdAt DateTime @default(now())
-
-
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
 }
 
-
-
-
-
-
+// ======================================================
+// KEUANGAN
+// ======================================================
 
 model Keuangan {
+  id          String         @id @default(uuid())
+  jenis       JenisTransaksi
+  kategori    String
+  keterangan  String
+  pihak       String?
+  jumlah      Float
+  tanggal     DateTime
+  buktiUrl    String?
+  reimburseId String?        @unique
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
+  reimburse Reimburse? @relation(fields: [reimburseId], references: [id])
 
-  id String @id @default(uuid())
-
-
-  jenis JenisTransaksi
-
-
-  keterangan String
-
-
-  jumlah Float
-
-
-  tanggal DateTime
-
-
-  buktiUrl String?
-
-
-  createdAt DateTime @default(now())
-
-
+  @@index([jenis])
+  @@index([kategori])
+  @@index([tanggal])
 }
 
-
-
-
-
-
+// ======================================================
+// JADWAL
+// ======================================================
 
 model Jadwal {
+  id             String   @id @default(uuid())
+  judul          String
+  deskripsi      String?
+  lokasi         String?
+  mulai          DateTime
+  selesai        DateTime
+  dokumentasiUrl String?
+  createdAt      DateTime @default(now())
 
-
-  id String @id @default(uuid())
-
-
-  judul String
-
-
-  deskripsi String?
-
-
-  lokasi String?
-
-
-  mulai DateTime
-
-
-  selesai DateTime
-
-
-  createdAt DateTime @default(now())
-
-
+  @@index([mulai])
 }
 
-
-
-
-
-
+// ======================================================
+// DOKUMEN
+// ======================================================
 
 model Dokumen {
+  id        String   @id @default(uuid())
+  nama      String
+  kategori  String
+  fileUrl   String
+  createdAt DateTime @default(now())
 
+  @@index([kategori])
+}
 
-  id String @id @default(uuid())
+// ======================================================
+// LOKER
+// ======================================================
 
+model Loker {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  user    User          @relation(fields: [userId], references: [id])
+  folders LokerFolder[]
+  files   LokerFile[]
+  shares  LokerShare[]
+
+  @@index([userId])
+}
+
+// ======================================================
+// FOLDER LOKER
+// ======================================================
+
+model LokerFolder {
+  id              String           @id @default(uuid())
+  lokerId         String
+  parentId        String?
+  nama            String
+  storageProvider StorageProvider?
+  storageId       String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  loker Loker @relation(fields: [lokerId], references: [id], onDelete: Cascade)
+
+  parent   LokerFolder?  @relation("LokerFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children LokerFolder[] @relation("LokerFolderTree")
+
+  files LokerFile[]
+
+  @@index([lokerId])
+  @@index([parentId])
+}
+
+// ======================================================
+// FILE LOKER
+// ======================================================
+
+model LokerFile {
+  id       String  @id @default(uuid())
+  lokerId  String
+  folderId String?
+
+  // Nama file yang tampil di KAMOO
   nama String
 
+  // File fisik disimpan di Google Drive
+  storageProvider StorageProvider @default(GOOGLE_DRIVE)
 
-  kategori String
+  // Google Drive File ID
+  // Dibuat unique agar satu file Drive
+  // tidak tercatat dua kali di database.
+  storageId String @unique
 
+  // Link Google Drive untuk membuka file
+  storageUrl String?
 
-  fileUrl String
-
+  // Metadata file
+  ukuran   Int?
+  mimeType String?
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  loker  Loker        @relation(fields: [lokerId], references: [id], onDelete: Cascade)
+  folder LokerFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
+  @@index([lokerId])
+  @@index([folderId])
+  @@index([createdAt])
+  @@index([updatedAt])
 }
 
+// ======================================================
+// LOKER SHARED ACCESS
+// ======================================================
 
+model LokerShare {
+  id         String          @id @default(uuid())
+  lokerId    String
+  userId     String
+  permission LokerPermission
+  createdAt  DateTime        @default(now())
 
+  loker Loker @relation(fields: [lokerId], references: [id], onDelete: Cascade)
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([lokerId, userId])
+  @@index([userId])
+}
 
+// ======================================================
+// APPROVAL HISTORY
+// ======================================================
 
 model Approval {
+  id        String         @id @default(uuid())
+  modul     String
+  dataId    String
+  status    StatusApproval @default(MENUNGGU)
+  catatan   String?
+  userId    String
+  createdAt DateTime       @default(now())
 
+  user User @relation(fields: [userId], references: [id])
 
-  id String @id @default(uuid())
-
-
-  modul String
-
-
-  dataId String
-
-
-  status StatusApproval @default(MENUNGGU)
-
-
-  catatan String?
-
-
-  userId String
-
-
-
-  user User @relation(
-    fields:[userId],
-    references:[id]
-  )
-
-
-  createdAt DateTime @default(now())
-
-
+  @@index([modul, dataId])
+  @@index([userId])
 }
 
-
-
-
-
-
+// ======================================================
+// AUDIT LOG
+// ======================================================
 
 model AuditLog {
-
-
-  id String @id @default(uuid())
-
-
-  userId String
-
-
+  id        String   @id @default(uuid())
+  userId    String
+  modul     String?
+  dataId    String?
   aktivitas String
-
-
-
-  user User @relation(
-    fields:[userId],
-    references:[id]
-  )
-
-
   createdAt DateTime @default(now())
 
+  user User @relation(fields: [userId], references: [id])
 
+  @@index([userId])
+  @@index([createdAt])
+  @@index([modul, dataId])
 }

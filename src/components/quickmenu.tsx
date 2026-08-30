@@ -5,303 +5,126 @@ import {
   WalletCards,
   CalendarDays,
   FileSearch,
-  ArrowRight
+  ArrowUpRight,
 } from "lucide-react";
 
-
-
 const menus = [
+  {
+    title: "Ajukan Surat",
+    description: "Buat permohonan administrasi baru",
+    href: "/surat/pengajuan",
+    icon: FilePlus2,
+  },
 
-{
-title:"Ajukan Surat",
-description:
-"Permohonan surat organisasi dan kegiatan",
+  {
+    title: "Ajukan Reimburse",
+    description: "Ajukan penggantian biaya kegiatan",
+    href: "/keuangan/reimburse",
+    icon: WalletCards,
+  },
 
-href:"/surat/pengajuan",
+  {
+    title: "Jadwal Kegiatan",
+    description: "Lihat agenda organisasi terbaru",
+    href: "/jadwal",
+    icon: CalendarDays,
+  },
 
-icon:<FilePlus2 size={24}/>,
-
-color:
-"cyan"
-
-},
-
-
-{
-title:"Ajukan Reimburse",
-description:
-"Pengajuan penggantian biaya kegiatan",
-
-href:"/keuangan/reimburse",
-
-icon:<WalletCards size={24}/>,
-
-color:
-"green"
-
-},
-
-
-{
-title:"Jadwal Kegiatan",
-description:
-"Lihat agenda organisasi",
-
-href:"/jadwal",
-
-icon:<CalendarDays size={24}/>,
-
-color:
-"purple"
-
-},
-
-
-{
-title:"Status Surat",
-description:
-"Pantau proses pengajuan surat",
-
-href:"/surat",
-
-icon:<FileSearch size={24}/>,
-
-color:
-"orange"
-
-}
-
-
+  {
+    title: "Status Surat",
+    description: "Pantau proses pengajuan surat",
+    href: "/surat",
+    icon: FileSearch,
+  },
 ];
 
-
-
-
-
-export default function QuickMenu(){
-
-
-return (
-
-<section className="mt-10">
-
-
-
-<div className="mb-5">
-
-
-<h2
-
-className="
-text-xl
-font-bold
-text-white
-"
-
->
-
-Menu Cepat
-
-</h2>
-
-
-<p
-
-className="
-text-sm
-text-slate-400
-mt-1
-"
-
->
-
-Akses fitur utama organisasi
-
-</p>
-
-
-</div>
-
-
-
-
-
-
-
-<div
-
-className="
-grid
-grid-cols-1
-md:grid-cols-2
-xl:grid-cols-4
-gap-5
-"
-
->
-
-
-{
-
-menus.map((item)=>(
-
-
-<Link
-
-key={item.title}
-
-href={item.href}
-
-className="
-group
-relative
-overflow-hidden
-rounded-2xl
-border
-border-white/10
-bg-[#0b1628]
-p-6
-transition-all
-duration-300
-hover:-translate-y-1
-hover:border-cyan-400/40
-hover:shadow-xl
-"
-
->
-
-
-<div
-
-className="
-flex
-items-start
-justify-between
-"
-
->
-
-
-<div
-
-className={`
-flex
-h-12
-w-12
-items-center
-justify-center
-rounded-xl
-bg-white/5
-transition
-duration-300
-group-hover:scale-110
-
-${
-item.color==="cyan"
-?
-"text-cyan-400"
-:
-item.color==="green"
-?
-"text-emerald-400"
-:
-item.color==="purple"
-?
-"text-purple-400"
-:
-"text-orange-400"
-}
-
-`}
-
->
-
-{item.icon}
-
-</div>
-
-
-
-
-
-<ArrowRight
-
-size={18}
-
-className="
-text-slate-500
-transition
-group-hover:text-white
-group-hover:translate-x-1
-"
-
-/>
-
-
-</div>
-
-
-
-
-
-
-
-
-<h3
-
-className="
-mt-5
-font-semibold
-text-white
-text-lg
-"
-
->
-
-{item.title}
-
-</h3>
-
-
-
-
-
-<p
-
-className="
-mt-2
-text-sm
-leading-relaxed
-text-slate-400
-"
-
->
-
-{item.description}
-
-</p>
-
-
-
-
-
-</Link>
-
-
-))
-
-}
-
-
-</div>
-
-
-
-
-
-</section>
-
-
-)
-
+export default function QuickMenu() {
+  return (
+    <section>
+      <div className="mb-5">
+        <h2 className="text-xl font-bold text-slate-900">
+          Menu Cepat
+        </h2>
+
+        <p className="mt-1 text-sm text-slate-500">
+          Akses fitur utama organisasi
+        </p>
+      </div>
+
+      <div
+        className="
+          grid
+          grid-cols-1
+          gap-4
+          sm:grid-cols-2
+          xl:grid-cols-4
+        "
+      >
+        {menus.map((item) => {
+          const Icon = item.icon;
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="
+                group
+                rounded-3xl
+                border
+                border-slate-200
+                bg-white
+                p-5
+                shadow-sm
+                transition-all
+                duration-300
+                hover:-translate-y-1
+                hover:border-cyan-200
+                hover:shadow-xl
+                hover:shadow-cyan-100/60
+              "
+            >
+              <div className="flex items-start justify-between">
+                <div
+                  className="
+                    flex
+                    h-11
+                    w-11
+                    items-center
+                    justify-center
+                    rounded-2xl
+                    bg-gradient-to-br
+                    from-cyan-500
+                    to-teal-500
+                    text-white
+                    shadow-md
+                  "
+                >
+                  <Icon size={20} />
+                </div>
+
+                <ArrowUpRight
+                  size={18}
+                  className="
+                    text-slate-300
+                    transition
+                    group-hover:-translate-y-0.5
+                    group-hover:translate-x-0.5
+                    group-hover:text-cyan-600
+                  "
+                />
+              </div>
+
+              <h3 className="mt-5 font-semibold text-slate-900">
+                {item.title}
+              </h3>
+
+              <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                {item.description}
+              </p>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
 }

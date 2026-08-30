@@ -1,197 +1,113 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 
-
-export default function CardStat({
-
-title,
-
-value,
-
-icon,
-
-description,
-
-color="cyan"
-
-}:{
-
-title:string;
-
-value:string | number;
-
-icon:ReactNode;
-
-description?:string;
-
-color?:
-"cyan"
-|
-"green"
-|
-"orange"
-|
-"purple";
-
-}){
-
-
-
-const colors = {
-
-
-cyan:
-"from-cyan-500/20 to-cyan-500/5 border-cyan-500/20 text-cyan-400",
-
-
-green:
-"from-emerald-500/20 to-emerald-500/5 border-emerald-500/20 text-emerald-400",
-
-
-orange:
-"from-orange-500/20 to-orange-500/5 border-orange-500/20 text-orange-400",
-
-
-purple:
-"from-purple-500/20 to-purple-500/5 border-purple-500/20 text-purple-400",
-
-
+type CardStatProps = {
+  title: string;
+  value: string | number;
+  icon: ReactNode;
+  description?: string;
+  color?: "cyan" | "green" | "orange" | "purple";
 };
 
+const styles = {
+  cyan: {
+    icon: "from-cyan-500 to-teal-500",
+    soft: "bg-cyan-50",
+  },
 
+  green: {
+    icon: "from-emerald-500 to-teal-500",
+    soft: "bg-emerald-50",
+  },
 
-return (
+  orange: {
+    icon: "from-amber-500 to-orange-500",
+    soft: "bg-amber-50",
+  },
 
-<div
+  purple: {
+    icon: "from-violet-500 to-purple-500",
+    soft: "bg-violet-50",
+  },
+};
 
-className={`
-relative
-overflow-hidden
-rounded-2xl
-border
-bg-gradient-to-br
-${colors[color]}
-bg-[#0b1628]
-p-6
-transition-all
-duration-300
-hover:-translate-y-1
-hover:shadow-xl
-group
-`}
+export default function CardStat({
+  title,
+  value,
+  icon,
+  description,
+  color = "cyan",
+}: CardStatProps) {
+  const style = styles[color];
 
->
+  return (
+    <div
+      className="
+        group
+        relative
+        overflow-hidden
+        rounded-3xl
+        border
+        border-slate-200
+        bg-white
+        p-5
+        sm:p-6
+        shadow-sm
+        transition-all
+        duration-300
+        hover:-translate-y-1
+        hover:border-cyan-200
+        hover:shadow-xl
+        hover:shadow-cyan-100/60
+      "
+    >
+      <div
+        className={`
+          absolute
+          right-0
+          top-0
+          h-28
+          w-28
+          rounded-full
+          ${style.soft}
+          blur-3xl
+          opacity-70
+        `}
+      />
 
+      <div
+        className={`
+          relative
+          flex
+          h-12
+          w-12
+          items-center
+          justify-center
+          rounded-2xl
+          bg-gradient-to-br
+          ${style.icon}
+          text-white
+          shadow-lg
+          transition-transform
+          duration-300
+          group-hover:scale-105
+        `}
+      >
+        {icon}
+      </div>
 
-{/* ICON */}
+      <p className="relative mt-5 text-sm font-medium text-slate-500">
+        {title}
+      </p>
 
-<div
+      <h2 className="relative mt-1 text-3xl font-extrabold tracking-tight text-slate-900">
+        {value}
+      </h2>
 
-className="
-mb-5
-flex
-h-12
-w-12
-items-center
-justify-center
-rounded-xl
-bg-white/5
-transition
-duration-300
-group-hover:scale-110
-"
-
->
-
-<div
-
-className="
-text-current
-"
-
->
-
-{icon}
-
-</div>
-
-
-</div>
-
-
-
-
-
-
-
-{/* TITLE */}
-
-<p
-
-className="
-text-sm
-text-slate-400
-"
-
->
-
-{title}
-
-</p>
-
-
-
-
-
-
-{/* VALUE */}
-
-<h2
-
-className="
-mt-2
-text-4xl
-font-bold
-tracking-tight
-text-white
-"
-
->
-
-{value}
-
-</h2>
-
-
-
-
-
-
-
-
-{
-description &&
-
-<p
-
-className="
-mt-3
-text-xs
-text-slate-500
-"
-
->
-
-{description}
-
-</p>
-
-}
-
-
-
-</div>
-
-
-)
-
+      {description && (
+        <p className="relative mt-2 text-xs leading-relaxed text-slate-400">
+          {description}
+        </p>
+      )}
+    </div>
+  );
 }

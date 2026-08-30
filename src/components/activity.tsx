@@ -1,399 +1,141 @@
 import {
-  CheckCircle2,
-  Clock3,
-  CalendarDays,
   FileText,
   Wallet,
+  CalendarDays,
+  Clock3,
 } from "lucide-react";
 
-
-
 const activities = [
+  {
+    title: "Pengajuan surat baru",
+    description: "Permohonan administrasi organisasi",
+    status: "Menunggu",
+    time: "Baru saja",
+    icon: FileText,
+  },
 
-{
-title:"Surat Perjalanan Dinas",
+  {
+    title: "Reimburse kegiatan",
+    description: "Pengajuan biaya operasional",
+    status: "Diproses",
+    time: "2 jam lalu",
+    icon: Wallet,
+  },
 
-description:
-"Ahmad mengajukan surat baru",
-
-status:"Menunggu",
-
-time:"Baru saja",
-
-icon:
-<FileText size={18}/>,
-
-color:
-"yellow"
-
-},
-
-
-{
-title:"Reimburse Transportasi",
-
-description:
-"Pengajuan biaya kegiatan telah diproses",
-
-status:"Disetujui",
-
-time:"2 jam lalu",
-
-icon:
-<Wallet size={18}/>,
-
-color:
-"green"
-
-},
-
-
-{
-title:"Rapat Pengurus",
-
-description:
-"Agenda kegiatan organisasi ditambahkan",
-
-status:"Terjadwal",
-
-time:"Kemarin",
-
-icon:
-<CalendarDays size={18}/>,
-
-color:
-"blue"
-
-}
-
-
+  {
+    title: "Agenda organisasi",
+    description: "Jadwal kegiatan terbaru",
+    status: "Terjadwal",
+    time: "Hari ini",
+    icon: CalendarDays,
+  },
 ];
 
-
-
-
-
-
-
-export default function Activity(){
-
-
-
-return (
-
-<section className="mt-10">
-
-
-
-<div className="mb-5">
-
-
-<h2
-
-className="
-text-xl
-font-bold
-text-white
-"
-
->
-
-Aktivitas Terbaru
-
-</h2>
-
-
-<p
-
-className="
-text-sm
-text-slate-400
-mt-1
-"
-
->
-
-Riwayat aktivitas organisasi terbaru
-
-</p>
-
-
-</div>
-
-
-
-
-
-
-
-
-<div
-
-className="
-rounded-2xl
-border
-border-white/10
-bg-[#0b1628]
-p-6
-"
-
->
-
-
-<div
-
-className="
-relative
-space-y-6
-"
-
->
-
-
-{/* LINE */}
-
-<div
-
-className="
-absolute
-left-5
-top-5
-bottom-5
-w-px
-bg-white/10
-"
-
-/>
-
-
-
-
-
-{
-
-activities.map((item,index)=>(
-
-
-<div
-
-key={index}
-
-className="
-relative
-flex
-gap-5
-group
-"
-
->
-
-
-{/* ICON */}
-
-<div
-
-className={`
-relative
-z-10
-flex
-h-10
-w-10
-items-center
-justify-center
-rounded-full
-bg-[#111d32]
-border
-border-white/10
-
-${
-item.color==="yellow"
-?
-"text-yellow-400"
-:
-item.color==="green"
-?
-"text-emerald-400"
-:
-"text-blue-400"
-}
-
-transition
-duration-300
-group-hover:scale-110
-
-`}
-
->
-
-{item.icon}
-
-
-</div>
-
-
-
-
-
-
-
-
-{/* CONTENT */}
-
-<div
-
-className="
-flex-1
-rounded-xl
-border
-border-white/5
-bg-white/[0.03]
-p-4
-transition
-duration-300
-group-hover:bg-white/[0.06]
-"
-
->
-
-
-<div
-
-className="
-flex
-justify-between
-gap-4
-"
-
->
-
-
-<div>
-
-
-<h3
-
-className="
-font-semibold
-text-white
-"
-
->
-
-{item.title}
-
-</h3>
-
-
-<p
-
-className="
-mt-1
-text-sm
-text-slate-400
-"
-
->
-
-{item.description}
-
-</p>
-
-
-</div>
-
-
-
-
-
-
-
-<span
-
-className={`
-text-xs
-font-medium
-
-${
-item.color==="yellow"
-?
-"text-yellow-400"
-:
-item.color==="green"
-?
-"text-emerald-400"
-:
-"text-blue-400"
-}
-
-`}
-
->
-
-{item.status}
-
-</span>
-
-
-
-</div>
-
-
-
-
-
-<div
-
-className="
-mt-3
-flex
-items-center
-gap-2
-text-xs
-text-slate-500
-"
-
->
-
-
-<Clock3 size={13}/>
-
-
-{item.time}
-
-
-</div>
-
-
-
-
-</div>
-
-
-
-
-
-</div>
-
-
-))
-
-
-}
-
-
-
-</div>
-
-
-
-</div>
-
-
-
-
-</section>
-
-
-)
-
+export default function Activity() {
+  return (
+    <section>
+      <div className="mb-5">
+        <h2 className="text-xl font-bold text-slate-900">
+          Aktivitas Terbaru
+        </h2>
+
+        <p className="mt-1 text-sm text-slate-500">
+          Ringkasan aktivitas sistem organisasi
+        </p>
+      </div>
+
+      <div
+        className="
+          overflow-hidden
+          rounded-3xl
+          border
+          border-slate-200
+          bg-white
+          shadow-sm
+        "
+      >
+        {activities.map((item, index) => {
+          const Icon = item.icon;
+
+          return (
+            <div
+              key={item.title}
+              className={`
+                flex
+                items-start
+                gap-4
+                p-5
+                transition
+                hover:bg-cyan-50/40
+
+                ${
+                  index !== activities.length - 1
+                    ? "border-b border-slate-100"
+                    : ""
+                }
+              `}
+            >
+              <div
+                className="
+                  flex
+                  h-11
+                  w-11
+                  shrink-0
+                  items-center
+                  justify-center
+                  rounded-2xl
+                  bg-cyan-50
+                  text-cyan-600
+                "
+              >
+                <Icon size={19} />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div
+                  className="
+                    flex
+                    flex-col
+                    gap-1
+                    sm:flex-row
+                    sm:items-center
+                    sm:justify-between
+                  "
+                >
+                  <h3 className="font-semibold text-slate-900">
+                    {item.title}
+                  </h3>
+
+                  <span
+                    className="
+                      w-fit
+                      rounded-full
+                      bg-cyan-50
+                      px-2.5
+                      py-1
+                      text-xs
+                      font-medium
+                      text-cyan-700
+                    "
+                  >
+                    {item.status}
+                  </span>
+                </div>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  {item.description}
+                </p>
+
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
+                  <Clock3 size={13} />
+
+                  {item.time}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
 }

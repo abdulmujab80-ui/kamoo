@@ -1,481 +1,599 @@
-import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 
+import {
+  ArrowUpRight,
+  Search,
+  ShieldCheck,
+  UserCheck,
+  UserPlus,
+  Users,
+  UserX,
+} from "lucide-react";
 
-function RoleBadge({
-role
-}:{
-role:string
-}){
+import type {
+  Prisma,
+  Role,
+} from "@prisma/client";
 
+import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
-const color:any={
+import {
+  RoleBadge,
+  StatusBadge,
+  UserAvatar,
+} from "./components/UserUI";
 
-SUPERADMIN:
-"bg-purple-500/20 text-purple-400",
+import UserStatusAction from "./components/UserStatusAction";
 
-ADMIN_SEKRETARIS:
-"bg-blue-500/20 text-blue-400",
-
-ADMIN_BENDAHARA:
-"bg-green-500/20 text-green-400",
-
-PENGURUS:
-"bg-yellow-500/20 text-yellow-400",
-
-ANGGOTA:
-"bg-gray-500/20 text-gray-300"
-
+type PageProps = {
+  searchParams: Promise<{
+    q?: string;
+    role?: string;
+    status?: string;
+  }>;
 };
 
+const ROLES: Role[] = [
+  "SUPERADMIN",
+  "ADMIN_SEKRETARIS",
+  "ADMIN_BENDAHARA",
+  "PENGURUS",
+  "ANGGOTA",
+];
 
-return (
+export default async function PenggunaPage({
+  searchParams,
+}: PageProps) {
+  const session = await getSession();
 
-<span
-className={`
-px-3
-py-1
-rounded-full
-text-sm
-${color[role]}
-`}
->
+  if (!session) {
+    redirect("/login");
+  }
 
-{role}
+  if (String(session.role) !== "SUPERADMIN") {
+    redirect("/dashboard");
+  }
 
-</span>
+  const params = await searchParams;
+  const q = String(params.q ?? "").trim();
 
-)
+  const role = ROLES.includes(params.role as Role)
+    ? (params.role as Role)
+    : null;
 
+  const status =
+    params.status === "aktif" ||
+    params.status === "nonaktif"
+      ? params.status
+      : null;
+
+  const where: Prisma.UserWhereInput = {};
+
+  if (q) {
+    where.OR = [
+      {
+        nama: {
+          contains: q,
+          mode: "insensitive",
+        },
+      },
+      {
+        email: {
+          contains: q,
+          mode: "insensitive",
+        },
+      },
+    ];
+  }
+
+  if (role) {
+    where.role = role;
+  }
+
+  if (status) {
+    where.aktif = status === "aktif";
+  }
+
+  const [
+    users,
+    totalUser,
+    totalAktif,
+    totalNonaktif,
+    roleGroups,
+  ] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        nama: true,
+        email: true,
+        role: true,
+        aktif: true,
+        fotoProfil: true,
+        createdAt: true,
+      },
+      orderBy: [
+        { aktif: "desc" },
+        { nama: "asc" },
+      ],
+    }),
+
+    prisma.user.count(),
+
+    prisma.user.count({
+      where: { aktif: true },
+    }),
+
+    prisma.user.count({
+      where: { aktif: false },
+    }),
+
+    prisma.user.groupBy({
+      by: ["role"],
+    }),
+  ]);
+
+  return (
+    <div
+      className="
+        mx-auto w-full max-w-[1500px]
+        space-y-6 sm:space-y-7
+      "
+    >
+      <section
+        className="
+          flex flex-col gap-4
+          sm:flex-row sm:items-end sm:justify-between
+        "
+      >
+        <div>
+          <p className="text-sm font-bold text-cyan-600">
+            Administrasi Akun
+          </p>
+
+          <h1
+            className="
+              mt-1 text-2xl font-extrabold tracking-tight
+              text-slate-900 sm:text-3xl
+            "
+          >
+            Manajemen Pengguna
+          </h1>
+
+          <p className="mt-2 text-sm text-slate-500 sm:text-base">
+            Kelola akun, role, dan status akses pengguna KAMOO.
+          </p>
+        </div>
+
+        <Link
+          href="/pengguna/tambah"
+          className="
+            inline-flex w-fit items-center justify-center gap-2
+            rounded-xl bg-cyan-600 px-5 py-3 text-sm
+            font-bold text-white shadow-sm transition
+            hover:bg-cyan-700
+          "
+        >
+          <UserPlus size={18} />
+          Tambah Pengguna
+        </Link>
+      </section>
+
+      <section
+        className="
+          grid grid-cols-2 gap-3 lg:grid-cols-4
+        "
+      >
+        <StatCard
+          icon={<Users size={20} />}
+          label="Total Pengguna"
+          value={totalUser}
+          helper="Semua akun"
+          tone="cyan"
+        />
+
+        <StatCard
+          icon={<UserCheck size={20} />}
+          label="Akun Aktif"
+          value={totalAktif}
+          helper="Dapat digunakan"
+          tone="emerald"
+        />
+
+        <StatCard
+          icon={<UserX size={20} />}
+          label="Nonaktif"
+          value={totalNonaktif}
+          helper="Akses dihentikan"
+          tone="slate"
+        />
+
+        <StatCard
+          icon={<ShieldCheck size={20} />}
+          label="Role Terpakai"
+          value={roleGroups.length}
+          helper="Jenis akses"
+          tone="violet"
+        />
+      </section>
+
+      <section
+        className="
+          rounded-3xl border border-slate-200
+          bg-white p-4 shadow-sm sm:p-5
+        "
+      >
+        <form
+          action="/pengguna"
+          method="get"
+          className="
+            grid grid-cols-1 gap-3
+            md:grid-cols-[1fr_220px_180px_auto]
+          "
+        >
+          <div className="relative">
+            <Search
+              size={17}
+              className="
+                pointer-events-none absolute left-4 top-1/2
+                -translate-y-1/2 text-slate-400
+              "
+            />
+
+            <input
+              name="q"
+              defaultValue={q}
+              placeholder="Cari nama atau email..."
+              className="
+                w-full rounded-xl border border-slate-200
+                bg-slate-50 py-3 pl-11 pr-4 text-sm
+                outline-none transition
+                focus:border-cyan-400 focus:bg-white
+                focus:ring-4 focus:ring-cyan-50
+              "
+            />
+          </div>
+
+          <select
+            name="role"
+            defaultValue={role ?? ""}
+            className={filterClass}
+          >
+            <option value="">Semua Role</option>
+            <option value="SUPERADMIN">Superadmin</option>
+            <option value="ADMIN_SEKRETARIS">
+              Admin Sekretaris
+            </option>
+            <option value="ADMIN_BENDAHARA">
+              Admin Bendahara
+            </option>
+            <option value="PENGURUS">Pengurus</option>
+            <option value="ANGGOTA">Anggota</option>
+          </select>
+
+          <select
+            name="status"
+            defaultValue={status ?? ""}
+            className={filterClass}
+          >
+            <option value="">Semua Status</option>
+            <option value="aktif">Aktif</option>
+            <option value="nonaktif">Nonaktif</option>
+          </select>
+
+          <button
+            type="submit"
+            className="
+              rounded-xl bg-slate-900 px-5 py-3
+              text-sm font-bold text-white transition
+              hover:bg-slate-800
+            "
+          >
+            Terapkan
+          </button>
+        </form>
+      </section>
+
+      <section
+        className="
+          overflow-hidden rounded-3xl border border-slate-200
+          bg-white shadow-sm
+        "
+      >
+        <div
+          className="
+            flex items-center justify-between gap-4
+            border-b border-slate-100 px-5 py-5 sm:px-6
+          "
+        >
+          <div>
+            <h2 className="font-bold text-slate-900">
+              Daftar Pengguna
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {users.length} akun sesuai filter
+            </p>
+          </div>
+        </div>
+
+        {users.length === 0 ? (
+          <div
+            className="
+              flex min-h-[260px] flex-col items-center
+              justify-center px-6 py-12 text-center
+            "
+          >
+            <div
+              className="
+                flex h-14 w-14 items-center justify-center
+                rounded-2xl bg-cyan-50 text-cyan-600
+              "
+            >
+              <Users size={24} />
+            </div>
+
+            <h3 className="mt-4 font-bold text-slate-800">
+              Pengguna tidak ditemukan
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Ubah kata pencarian atau filter.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full">
+                <thead className="bg-slate-50">
+                  <tr
+                    className="
+                      text-left text-xs font-bold uppercase
+                      tracking-wide text-slate-400
+                    "
+                  >
+                    <th className="px-6 py-4">Pengguna</th>
+                    <th className="px-4 py-4">Role</th>
+                    <th className="px-4 py-4">Status</th>
+                    <th className="px-4 py-4">Terdaftar</th>
+                    <th className="px-6 py-4 text-right">Aksi</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {users.map((user) => (
+                    <tr
+                      key={user.id}
+                      className="
+                        transition hover:bg-cyan-50/30
+                      "
+                    >
+                      <td className="px-6 py-4">
+                        <div
+                          className="
+                            flex min-w-[240px] items-center gap-3
+                          "
+                        >
+                          <UserAvatar
+                            url={user.fotoProfil}
+                            nama={user.nama}
+                            size="sm"
+                          />
+
+                          <div className="min-w-0">
+                            <p
+                              className="
+                                truncate text-sm font-bold
+                                text-slate-800
+                              "
+                            >
+                              {user.nama}
+                            </p>
+                            <p
+                              className="
+                                mt-0.5 truncate text-xs text-slate-500
+                              "
+                            >
+                              {user.email}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <RoleBadge role={user.role} />
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <StatusBadge aktif={user.aktif} />
+                      </td>
+
+                      <td
+                        className="
+                          whitespace-nowrap px-4 py-4
+                          text-sm text-slate-500
+                        "
+                      >
+                        {formatDate(user.createdAt)}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <div
+                          className="
+                            flex items-center justify-end gap-2
+                          "
+                        >
+                          <Link
+                            href={`/pengguna/${user.id}`}
+                            className="
+                              inline-flex h-10 items-center gap-1.5
+                              rounded-xl border border-slate-200 px-3
+                              text-xs font-bold text-slate-700 transition
+                              hover:border-cyan-200 hover:bg-cyan-50
+                              hover:text-cyan-700
+                            "
+                          >
+                            Detail
+                            <ArrowUpRight size={14} />
+                          </Link>
+
+                          <Link
+                            href={`/pengguna/${user.id}/edit`}
+                            className="
+                              inline-flex h-10 items-center rounded-xl
+                              bg-cyan-600 px-3 text-xs font-bold
+                              text-white transition hover:bg-cyan-700
+                            "
+                          >
+                            Edit
+                          </Link>
+
+                          <UserStatusAction
+                            userId={user.id}
+                            nama={user.nama}
+                            aktif={user.aktif}
+                            compact
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="divide-y divide-slate-100 md:hidden">
+              {users.map((user) => (
+                <article key={user.id} className="space-y-4 p-5">
+                  <div className="flex items-start gap-3">
+                    <UserAvatar
+                      url={user.fotoProfil}
+                      nama={user.nama}
+                    />
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-bold text-slate-900">
+                        {user.nama}
+                      </p>
+                      <p className="mt-1 truncate text-sm text-slate-500">
+                        {user.email}
+                      </p>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <RoleBadge role={user.role} />
+                        <StatusBadge aktif={user.aktif} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className="
+                      flex items-center justify-between gap-3
+                      border-t border-slate-100 pt-4
+                    "
+                  >
+                    <span className="text-xs text-slate-400">
+                      {formatDate(user.createdAt)}
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/pengguna/${user.id}`}
+                        className="
+                          rounded-xl border border-slate-200
+                          px-3 py-2 text-xs font-bold text-slate-700
+                        "
+                      >
+                        Detail
+                      </Link>
+
+                      <Link
+                        href={`/pengguna/${user.id}/edit`}
+                        className="
+                          rounded-xl bg-cyan-600 px-3 py-2
+                          text-xs font-bold text-white
+                        "
+                      >
+                        Edit
+                      </Link>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+    </div>
+  );
 }
 
+const filterClass = `
+  w-full rounded-xl border border-slate-200 bg-slate-50
+  px-4 py-3 text-sm text-slate-700 outline-none transition
+  focus:border-cyan-400 focus:bg-white focus:ring-4
+  focus:ring-cyan-50
+`;
 
-
-
-
-function StatusBadge({
-aktif
-}:{
-aktif:boolean
-}){
-
-
-return (
-
-<span
-className={`
-px-3
-py-1
-rounded-full
-text-sm
-${
-aktif
-?
-"bg-green-500/20 text-green-400"
-:
-"bg-red-500/20 text-red-400"
-}
-`}
->
-
-{
-aktif
-?
-"Aktif"
-:
-"Nonaktif"
+function formatDate(value: Date) {
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(value);
 }
 
-</span>
-
-)
-
-}
-
-
-
-
-
-export default async function PenggunaPage(){
-
-
-
-const users =
-await prisma.user.findMany({
-
-orderBy:{
-createdAt:"desc"
-}
-
-});
-
-
-
-
-
-return (
-
-<div className="p-8">
-
-
-
-<div
-className="
-flex
-justify-between
-items-center
-mb-8
-"
->
-
-
-<div>
-
-<h1
-className="
-text-3xl
-font-bold
-"
->
-
-Manajemen Pengguna
-
-</h1>
-
-
-<p
-className="
-text-gray-400
-mt-2
-"
->
-
-Kelola akun organisasi KAMOO
-
-</p>
-
-
-</div>
-
-
-
-
-
-<Link
-
-href="/pengguna/tambah"
-
-className="
-bg-cyan-600
-hover:bg-cyan-700
-px-5
-py-3
-rounded-lg
-font-semibold
-"
-
->
-
-+ Tambah Pengguna
-
-</Link>
-
-
-
-</div>
-
-
-
-
-
-
-
-
-
-<div
-className="
-bg-slate-900
-border
-border-slate-800
-rounded-xl
-overflow-hidden
-"
->
-
-
-
-<table
-className="
-w-full
-"
->
-
-
-<thead
-className="
-bg-slate-800
-"
->
-
-
-<tr>
-
-
-<th className="p-4 text-left">
-Nama
-</th>
-
-
-<th className="p-4 text-left">
-Email
-</th>
-
-
-<th className="p-4 text-left">
-Role
-</th>
-
-
-<th className="p-4 text-left">
-Status
-</th>
-
-
-<th className="p-4 text-left">
-Tanggal Daftar
-</th>
-
-
-<th className="p-4 text-left">
-Aksi
-</th>
-
-
-</tr>
-
-
-</thead>
-
-
-
-
-
-
-
-<tbody>
-
-
-{
-users.length===0
-
-?
-
-
-<tr>
-
-<td
-colSpan={6}
-className="
-p-8
-text-center
-text-gray-400
-"
->
-
-Belum ada pengguna
-
-</td>
-
-</tr>
-
-
-:
-
-
-users.map((user)=>(
-
-
-<tr
-
-key={user.id}
-
-className="
-border-t
-border-slate-800
-hover:bg-white/5
-"
-
->
-
-
-<td
-className="
-p-4
-font-semibold
-"
->
-
-{user.nama}
-
-</td>
-
-
-
-
-<td
-className="
-p-4
-"
->
-
-{user.email}
-
-</td>
-
-
-
-
-<td
-className="
-p-4
-"
->
-
-<RoleBadge
-role={user.role}
-/>
-
-</td>
-
-
-
-
-<td
-className="
-p-4
-"
->
-
-<StatusBadge
-aktif={user.aktif}
-/>
-
-</td>
-
-
-
-
-
-<td
-className="
-p-4
-"
->
-
-{
-user.createdAt.toLocaleDateString(
-"id-ID"
-)
-}
-
-</td>
-
-
-
-
-
-
-<td
-className="
-p-4
-"
->
-
-
-<div
-className="
-flex
-gap-2
-"
->
-
-
-<Link
-
-href={`/pengguna/${user.id}`}
-
-className="
-bg-slate-700
-px-3
-py-2
-rounded-lg
-text-sm
-"
-
->
-
-Detail
-
-</Link>
-
-
-
-<Link
-
-href={`/pengguna/${user.id}/edit`}
-
-className="
-bg-cyan-600
-px-3
-py-2
-rounded-lg
-text-sm
-"
-
->
-
-Edit
-
-</Link>
-
-
-
-</div>
-
-
-</td>
-
-
-
-
-
-</tr>
-
-
-))
-
-
-}
-
-
-
-</tbody>
-
-
-
-</table>
-
-
-
-</div>
-
-
-
-
-
-</div>
-
-
-)
-
+function StatCard({
+  icon,
+  label,
+  value,
+  helper,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  helper: string;
+  tone: "cyan" | "emerald" | "slate" | "violet";
+}) {
+  const tones = {
+    cyan: "bg-cyan-50 text-cyan-600",
+    emerald: "bg-emerald-50 text-emerald-600",
+    slate: "bg-slate-100 text-slate-500",
+    violet: "bg-violet-50 text-violet-600",
+  };
+
+  return (
+    <div
+      className="
+        rounded-2xl border border-slate-200 bg-white
+        p-4 shadow-sm sm:p-5
+      "
+    >
+      <div
+        className={`
+          flex h-10 w-10 items-center justify-center
+          rounded-xl ${tones[tone]}
+        `}
+      >
+        {icon}
+      </div>
+
+      <p className="mt-4 text-xs font-semibold text-slate-500 sm:text-sm">
+        {label}
+      </p>
+      <p
+        className="
+          mt-1 text-2xl font-extrabold tracking-tight
+          text-slate-900 sm:text-3xl
+        "
+      >
+        {value}
+      </p>
+      <p className="mt-1 text-[11px] text-slate-400 sm:text-xs">
+        {helper}
+      </p>
+    </div>
+  );
 }
